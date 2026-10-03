@@ -13,7 +13,8 @@
     "alerts:check": "tsx scripts/check-alerts.ts",
     "postinstall": "prisma generate",
     "probe": "tsx scripts/probe.ts",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "browser:install": "playwright install chromium"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
@@ -22,6 +23,7 @@
     "next": "16.3.8",
     "node-html-parser": "^9.0.4",
     "nodemailer": "^10.0.13",
+    "playwright": "^1.63.0",
     "prisma": "^7.10.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",

@@ -18,6 +18,7 @@ function filtersFromParams(params: URLSearchParams): SearchFilters {
     maxPrice: maxPrice > 0 ? maxPrice : null,
     freeShippingOnly: params.get("freeShippingOnly") === "1",
     newOnly: params.get("newOnly") === "1",
+    precise: params.get("precise") !== "0",
   };
 }
 
@@ -29,6 +30,7 @@ function paramsFromState(query: string, filters: SearchFilters): URLSearchParams
   if (filters.maxPrice) p.set("maxPrice", String(filters.maxPrice));
   if (filters.freeShippingOnly) p.set("freeShippingOnly", "1");
   if (filters.newOnly) p.set("newOnly", "1");
+  if (!filters.precise) p.set("precise", "0");
   return p;
 }
 
@@ -94,6 +96,7 @@ export function SearchPage() {
   }
 
   const okSources = useMemo(() => result?.sources.filter((s) => s.status === "ok") ?? [], [result]);
+  const hiddenByPrecision = useMemo(() => okSources.reduce((n, s) => n + s.hiddenByPrecision, 0), [okSources]);
   const errorSources = useMemo(() => result?.sources.filter((s) => s.status === "error") ?? [], [result]);
 
   return (
@@ -159,6 +162,10 @@ export function SearchPage() {
             <input type="checkbox" checked={filters.newOnly} onChange={(e) => updateFilters({ newOnly: e.target.checked })} />
             Só novos
           </label>
+          <label className="flex items-center gap-1.5" title="Esconde acessórios (capas, cabos, baterias) e itens que não batem com o que você digitou">
+            <input type="checkbox" checked={filters.precise} onChange={(e) => updateFilters({ precise: e.target.checked })} />
+            Modo preciso
+          </label>
           <label className="flex items-center gap-1.5">
             Até R$
             <input
@@ -208,6 +215,14 @@ export function SearchPage() {
               </span>
             ))}
           </div>
+          {hiddenByPrecision > 0 && (
+            <p className="mt-2 text-xs text-zinc-500">
+              {hiddenByPrecision} item(ns) escondido(s) pelo modo preciso (acessórios ou sem relação com a busca).{" "}
+              <button onClick={() => updateFilters({ precise: false })} className="underline">
+                Mostrar tudo
+              </button>
+            </p>
+          )}
           {errorSources.length > 0 && (
             <ul className="mt-2 space-y-1 text-xs text-red-700">
               {errorSources.map((s) => (

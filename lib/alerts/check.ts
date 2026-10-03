@@ -88,6 +88,7 @@ export async function checkAlerts(): Promise<AlertCheckSummary> {
         maxPrice: alert.maxPrice,
         freeShippingOnly: alert.freeShippingOnly,
         newOnly: alert.newOnly,
+        precise: alert.precise,
       };
       const result = await searchAll(alert.query, filters);
       const offers = result.offers;

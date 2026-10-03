@@ -1,5 +1,6 @@
 import { getActiveAdapters } from "./adapters";
 import { applyFilters, sortByPriceAsc } from "./filters";
+import { applyRelevance } from "./relevance";
 import type { Offer, SearchFilters, SearchResult, SourceStatus } from "./types";
 
 /** Quantas ofertas buscar por origem antes de filtrar. */
@@ -25,7 +26,8 @@ export async function searchAll(query: string, filters: SearchFilters): Promise<
   settled.forEach((result, i) => {
     const adapter = adapters[i];
     if (result.status === "fulfilled") {
-      const filtered = applyFilters(result.value, filters);
+      const relevance = filters.precise ? applyRelevance(result.value, query) : { kept: result.value, hidden: [] };
+      const filtered = applyFilters(relevance.kept, filters);
       allOffers.push(...filtered);
       sources.push({
         id: adapter.id,
@@ -33,6 +35,7 @@ export async function searchAll(query: string, filters: SearchFilters): Promise<
         status: "ok",
         fetched: result.value.length,
         shown: filtered.length,
+        hiddenByPrecision: relevance.hidden.length,
       });
     } else {
       const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
@@ -42,6 +45,7 @@ export async function searchAll(query: string, filters: SearchFilters): Promise<
         status: "error",
         fetched: 0,
         shown: 0,
+        hiddenByPrecision: 0,
         error: message,
       });
     }

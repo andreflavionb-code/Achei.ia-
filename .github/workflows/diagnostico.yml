@@ -27,6 +27,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Diagnóstico de cada site
         run: npx tsx scripts/diag.ts "${{ github.event.inputs.query || 'camera sony fx3' }}"
       - name: Busca completa (probe)

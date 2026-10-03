@@ -12,7 +12,7 @@ import { DEFAULT_FILTERS, type SearchFilters } from "../lib/offers/types";
 const args = process.argv.slice(2);
 const query = args.filter((a) => !a.startsWith("--") && !/^\d/.test(a)).join(" ").trim();
 if (!query) {
-  console.error('Uso: npm run probe -- "termo de busca" [--sem-juros] [--nacional|--internacional] [--max 3000] [--frete-gratis] [--novo]');
+  console.error('Uso: npm run probe -- "termo de busca" [--sem-juros] [--nacional|--internacional] [--max 3000] [--frete-gratis] [--novo] [--tudo (desliga modo preciso)]');
   process.exit(1);
 }
 
@@ -24,6 +24,7 @@ const filters: SearchFilters = {
   maxPrice: maxIdx >= 0 ? Number(args[maxIdx + 1]) : null,
   freeShippingOnly: args.includes("--frete-gratis"),
   newOnly: args.includes("--novo"),
+  precise: !args.includes("--tudo"),
 };
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -32,7 +33,10 @@ searchAll(query, filters)
   .then((result) => {
     console.log(`\nBusca: "${result.query}"  filtros: ${JSON.stringify(filters)}\n`);
     for (const s of result.sources) {
-      const line = s.status === "ok" ? `${s.shown} exibidas de ${s.fetched} coletadas` : `ERRO: ${s.error}`;
+      const line =
+        s.status === "ok"
+          ? `${s.shown} exibidas de ${s.fetched} coletadas (${s.hiddenByPrecision} escondidas pelo modo preciso)`
+          : `ERRO: ${s.error}`;
       console.log(`  ${s.name.padEnd(16)} ${line}`);
     }
     console.log(`\nTotal: ${result.offers.length} ofertas, ordenadas do menor para o maior preço.\n`);

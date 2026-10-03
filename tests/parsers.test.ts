@@ -171,15 +171,63 @@ test("filtros e ordenação combinados sobre várias origens", () => {
   const sorted = sortByPriceAsc(all);
   for (let i = 1; i < sorted.length; i++) assert.ok(sorted[i - 1].price <= sorted[i].price);
 
-  const semJuros = applyFilters(all, { interestFreeOnly: true, origin: "all", maxPrice: null, freeShippingOnly: false, newOnly: false });
+  const semJuros = applyFilters(all, { interestFreeOnly: true, origin: "all", maxPrice: null, freeShippingOnly: false, newOnly: false, precise: false });
   assert.ok(semJuros.every((o) => o.installments?.interestFree));
   assert.equal(semJuros.length, 3);
 
-  const nacionalNovo = applyFilters(all, { interestFreeOnly: false, origin: "national", maxPrice: 4400, freeShippingOnly: false, newOnly: true });
+  const nacionalNovo = applyFilters(all, { interestFreeOnly: false, origin: "national", maxPrice: 4400, freeShippingOnly: false, newOnly: true, precise: false });
   // Origem desconhecida (null) não é excluída pelo filtro "nacional"; só o que é sabidamente internacional.
   assert.ok(nacionalNovo.every((o) => o.isInternational !== true && o.condition !== "used" && o.price <= 4400));
   assert.ok(!nacionalNovo.some((o) => o.externalId === "MLB3456789012"));
 
-  const internacional = applyFilters(all, { interestFreeOnly: false, origin: "international", maxPrice: null, freeShippingOnly: false, newOnly: false });
+  const internacional = applyFilters(all, { interestFreeOnly: false, origin: "international", maxPrice: null, freeShippingOnly: false, newOnly: false, precise: false });
   assert.deepEqual(internacional.map((o) => o.externalId), ["MLB3456789012"]);
+});
+
+import { applyRelevance, specificTokens } from "../lib/offers/relevance";
+
+function offer(title: string, price: number) {
+  return {
+    id: `t:${title}`, source: "demo" as const, sourceName: "x", externalId: title, title, price, originalPrice: null,
+    currency: "BRL", installments: null, isInternational: null, freeShipping: null, condition: "new" as const,
+    sellerName: null, imageUrl: null, url: "", fetchedAt: NOW,
+  };
+}
+
+test("modo preciso: termos específicos ignoram palavras genéricas", () => {
+  assert.deepEqual(specificTokens("camera sony fx3"), ["sony", "fx3"]);
+  assert.deepEqual(specificTokens("Câmera Sony FX-3"), ["sony", "fx3"]);
+  assert.deepEqual(specificTokens("iphone 15 128gb"), ["iphone", "15", "128gb"]);
+});
+
+test("modo preciso: esconde acessórios e mantém o produto", () => {
+  const offers = [
+    offer("Sony FX3 Cinema Line Full-Frame", 24990),
+    offer("Câmera Sony Alpha FX3 ILME-FX3 Corpo", 23500),
+    offer("Carregador USB duplo para bateria Sony NP-FZ100 compatível FX3 A7", 74.09),
+    offer("Stainless Steel Camera Cage for Sony FX3 FX30", 85.58),
+    offer("Película protetora de tela Sony FX3", 29.9),
+    offer("Sony FX30 Cinema Line APS-C", 12990),
+    offer("Bateria NP-FZ100 Sony", 350),
+    offer("Sony FX3 usada 2 anos", 18000),
+  ];
+  const { kept, hidden } = applyRelevance(offers, "camera sony fx3");
+  assert.deepEqual(kept.map((o) => o.price), [24990, 23500, 18000]);
+  assert.equal(hidden.length, 5);
+});
+
+test("modo preciso: quem busca acessório recebe acessório", () => {
+  const offers = [offer("Capa iPhone 15 silicone", 49.9), offer("Capinha iPhone 15 transparente", 19.9), offer("iPhone 15 128GB", 4500)];
+  const { kept } = applyRelevance(offers, "capa iphone 15");
+  assert.deepEqual(kept.map((o) => o.price), [49.9]);
+});
+
+test("modo preciso: preço muito abaixo da mediana é escondido", () => {
+  const offers = [
+    offer("Sony FX3 A", 20000), offer("Sony FX3 B", 21000), offer("Sony FX3 C", 22000),
+    offer("Sony FX3 D", 23000), offer("Sony FX3 E", 24000), offer("Sony FX3 kit algo", 150),
+  ];
+  const { kept, hidden } = applyRelevance(offers, "sony fx3");
+  assert.equal(kept.length, 5);
+  assert.equal(hidden[0].price, 150);
 });

@@ -27,6 +27,7 @@ export async function POST(request: Request) {
         origin: f.origin ?? "all",
         freeShippingOnly: f.freeShippingOnly ?? false,
         newOnly: f.newOnly ?? false,
+        precise: f.precise ?? true,
       },
     });
 
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
       origin: true,
       freeShippingOnly: true,
       newOnly: true,
+      precise: true,
       lastCheckedAt: true,
       lastNotifiedAt: true,
       lastNotifiedPrice: true,

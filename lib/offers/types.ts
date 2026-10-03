@@ -50,6 +50,8 @@ export interface SearchFilters {
   freeShippingOnly: boolean;
   /** Só produtos novos. */
   newOnly: boolean;
+  /** Modo preciso: esconde acessórios e itens que não batem com a busca. */
+  precise: boolean;
 }
 
 export const DEFAULT_FILTERS: SearchFilters = {
@@ -58,6 +60,7 @@ export const DEFAULT_FILTERS: SearchFilters = {
   maxPrice: null,
   freeShippingOnly: false,
   newOnly: false,
+  precise: true,
 };
 
 export interface AdapterSearchOptions {
@@ -81,6 +84,8 @@ export interface SourceStatus {
   fetched: number;
   /** Ofertas que sobraram depois dos filtros. */
   shown: number;
+  /** Escondidas pelo modo preciso (acessórios etc.). */
+  hiddenByPrecision: number;
   error?: string;
 }
 

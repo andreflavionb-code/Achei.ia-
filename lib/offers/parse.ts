@@ -11,6 +11,7 @@ export const filtersSchema = z.object({
   maxPrice: z.coerce.number().positive().optional().nullable(),
   freeShippingOnly: boolParam.optional(),
   newOnly: boolParam.optional(),
+  precise: boolParam.optional(),
 });
 
 export const querySchema = z.string().trim().min(2, "Digite pelo menos 2 caracteres").max(120);
@@ -24,6 +25,7 @@ export function parseFilters(input: Record<string, unknown>): SearchFilters {
     maxPrice: parsed.maxPrice ?? null,
     freeShippingOnly: parsed.freeShippingOnly ?? DEFAULT_FILTERS.freeShippingOnly,
     newOnly: parsed.newOnly ?? DEFAULT_FILTERS.newOnly,
+    precise: parsed.precise ?? DEFAULT_FILTERS.precise,
   };
 }
 

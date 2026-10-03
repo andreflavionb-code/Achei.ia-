@@ -1,5 +1,6 @@
 import { parse } from "node-html-parser";
-import { dumpDebug, extractJsonScript, fetchHtml, findProductArrays, parseBRL, parseInstallments, ScrapeError } from "../html";
+import { dumpDebug, extractJsonScript, findProductArrays, parseBRL, parseInstallments, ScrapeError } from "../html";
+import { loadSearchPage, type PageSource } from "../fetchPage";
 import type { AdapterSearchOptions, MarketplaceAdapter, Offer } from "../types";
 
 /**
@@ -131,6 +132,12 @@ export function parseMagaluHtml(html: string, fetchedAt: string): Offer[] {
   return fromHtml(html, fetchedAt);
 }
 
+const MAGALU_SOURCE: PageSource = {
+  name: "Magazine Luiza",
+  waitFor: '[data-testid="product-card-container"], script#__NEXT_DATA__',
+  isBlocked: (html, _url, status) => status === 403 || /akamai-bot|Não é possível acessar a página/i.test(html),
+};
+
 export const magaluAdapter: MarketplaceAdapter = {
   id: "magalu",
   name: "Magazine Luiza",
@@ -143,20 +150,21 @@ export const magaluAdapter: MarketplaceAdapter = {
     const fetchedAt = new Date().toISOString();
     const pages = Math.max(1, Math.min(5, Math.ceil(options.maxResults / ITEMS_PER_PAGE)));
 
-    const firstHtml = await fetchHtml(buildUrl(query, 1));
-    const offers = parseMagaluHtml(firstHtml, fetchedAt);
+    const first = await loadSearchPage(buildUrl(query, 1), MAGALU_SOURCE);
+    const offers = parseMagaluHtml(first.html, fetchedAt);
     if (offers.length === 0) {
-      const file = await dumpDebug("magalu", firstHtml);
+      if (/não encontramos|nenhum resultado|não encontrou/i.test(first.html)) return [];
+      const file = await dumpDebug("magalu", first.html);
       throw new ScrapeError(
         `Nenhum produto reconhecido na página da Magazine Luiza${file ? `. HTML salvo em ${file}` : ""}`,
       );
     }
 
     const rest = await Promise.allSettled(
-      Array.from({ length: pages - 1 }, (_, i) => fetchHtml(buildUrl(query, i + 2))),
+      Array.from({ length: pages - 1 }, (_, i) => loadSearchPage(buildUrl(query, i + 2), MAGALU_SOURCE)),
     );
     for (const page of rest) {
-      if (page.status === "fulfilled") offers.push(...parseMagaluHtml(page.value, fetchedAt));
+      if (page.status === "fulfilled") offers.push(...parseMagaluHtml(page.value.html, fetchedAt));
     }
 
     const seen = new Set<string>();

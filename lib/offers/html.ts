@@ -24,6 +24,39 @@ export class ScrapeError extends Error {
   }
 }
 
+export interface FetchedPage {
+  html: string;
+  finalUrl: string;
+  status: number;
+}
+
+/** Como fetchHtml, mas devolve também a URL final (após redirecionamentos) e o status, sem lançar erro em 4xx/5xx. */
+export async function fetchHtmlFull(url: string, extraHeaders: Record<string, string> = {}): Promise<FetchedPage> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        ...extraHeaders,
+      },
+      signal: controller.signal,
+      redirect: "follow",
+      cache: "no-store",
+    });
+    return { html: await res.text(), finalUrl: res.url, status: res.status };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ScrapeError(`${new URL(url).hostname} demorou mais de ${TIMEOUT_MS / 1000}s`);
+    }
+    throw new ScrapeError(`Falha ao acessar ${new URL(url).hostname}: ${(err as Error).message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchHtml(url: string, extraHeaders: Record<string, string> = {}): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

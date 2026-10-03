@@ -1,6 +1,7 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { toAffiliateUrl } from "@/lib/mercadolivre/affiliate";
-import { dumpDebug, fetchHtml, parseBRL, parseInstallments, ScrapeError } from "../html";
+import { dumpDebug, parseBRL, parseInstallments, ScrapeError } from "../html";
+import { loadSearchPage, type PageSource } from "../fetchPage";
 import type { AdapterSearchOptions, MarketplaceAdapter, Offer } from "../types";
 
 /**
@@ -124,6 +125,14 @@ export function parseMercadoLivreHtml(html: string, fetchedAt: string): Offer[] 
   return offers;
 }
 
+const ML_SOURCE: PageSource = {
+  name: "Mercado Livre",
+  waitFor: "li.ui-search-layout__item, .poly-card, .ui-search-result__wrapper",
+  isBlocked: (html, finalUrl) =>
+    /account-verification|\/gz\/|captcha/i.test(finalUrl) ||
+    /account-verification|verifique que você não é um robô|Verificação de segurança/i.test(html),
+};
+
 export const mercadoLivreWebAdapter: MarketplaceAdapter = {
   id: "mercadolivre",
   name: "Mercado Livre",
@@ -136,24 +145,22 @@ export const mercadoLivreWebAdapter: MarketplaceAdapter = {
     const fetchedAt = new Date().toISOString();
     const pages = Math.max(1, Math.ceil(options.maxResults / ITEMS_PER_PAGE));
 
-    const firstHtml = await fetchHtml(buildUrl(query, 0));
-    const offers = parseMercadoLivreHtml(firstHtml, fetchedAt);
+    const first = await loadSearchPage(buildUrl(query, 0), ML_SOURCE);
+    const offers = parseMercadoLivreHtml(first.html, fetchedAt);
 
     if (offers.length === 0) {
-      const file = await dumpDebug("mercadolivre", firstHtml);
-      if (/captcha|robot|verifique que você não é um robô/i.test(firstHtml)) {
-        throw new ScrapeError("Mercado Livre pediu verificação anti-robô (captcha).");
-      }
+      if (/não encontramos|nenhum resultado|Não há anúncios/i.test(first.html)) return [];
+      const file = await dumpDebug("mercadolivre", first.html);
       throw new ScrapeError(
         `Nenhum produto reconhecido na página do Mercado Livre (layout pode ter mudado)${file ? `. HTML salvo em ${file}` : ""}`,
       );
     }
 
     const rest = await Promise.allSettled(
-      Array.from({ length: pages - 1 }, (_, i) => fetchHtml(buildUrl(query, (i + 1) * ITEMS_PER_PAGE))),
+      Array.from({ length: pages - 1 }, (_, i) => loadSearchPage(buildUrl(query, (i + 1) * ITEMS_PER_PAGE), ML_SOURCE)),
     );
     for (const page of rest) {
-      if (page.status === "fulfilled") offers.push(...parseMercadoLivreHtml(page.value, fetchedAt));
+      if (page.status === "fulfilled") offers.push(...parseMercadoLivreHtml(page.value.html, fetchedAt));
     }
 
     const seen = new Set<string>();

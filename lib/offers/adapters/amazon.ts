@@ -1,5 +1,6 @@
 import { parse, type HTMLElement } from "node-html-parser";
-import { dumpDebug, fetchHtml, parseBRL, parseInstallments, ScrapeError } from "../html";
+import { dumpDebug, parseBRL, parseInstallments, ScrapeError } from "../html";
+import { loadSearchPage, type PageSource } from "../fetchPage";
 import type { AdapterSearchOptions, MarketplaceAdapter, Offer } from "../types";
 
 /**
@@ -69,6 +70,13 @@ export function parseAmazonHtml(html: string, fetchedAt: string): Offer[] {
   return offers;
 }
 
+const AMAZON_SOURCE: PageSource = {
+  name: "Amazon",
+  waitFor: 'div[data-component-type="s-search-result"]',
+  isBlocked: (html, _url, status) =>
+    status === 503 || /captcha|Digite os caracteres|api-services-support@amazon\.com|Algo deu errado/i.test(html),
+};
+
 export const amazonAdapter: MarketplaceAdapter = {
   id: "amazon",
   name: "Amazon",
@@ -81,21 +89,19 @@ export const amazonAdapter: MarketplaceAdapter = {
     const fetchedAt = new Date().toISOString();
     const pages = Math.max(1, Math.min(4, Math.ceil(options.maxResults / ITEMS_PER_PAGE)));
 
-    const firstHtml = await fetchHtml(buildUrl(query, 1));
-    if (/captcha|Digite os caracteres|api-services-support@amazon\.com/i.test(firstHtml)) {
-      throw new ScrapeError("Amazon pediu verificação anti-robô (captcha). Tente de novo mais tarde.");
-    }
-    const offers = parseAmazonHtml(firstHtml, fetchedAt);
+    const first = await loadSearchPage(buildUrl(query, 1), AMAZON_SOURCE);
+    const offers = parseAmazonHtml(first.html, fetchedAt);
     if (offers.length === 0) {
-      const file = await dumpDebug("amazon", firstHtml);
+      if (/Nenhum resultado|não encontrou|não encontramos/i.test(first.html)) return [];
+      const file = await dumpDebug("amazon", first.html);
       throw new ScrapeError(`Nenhum produto reconhecido na página da Amazon${file ? `. HTML salvo em ${file}` : ""}`);
     }
 
     const rest = await Promise.allSettled(
-      Array.from({ length: pages - 1 }, (_, i) => fetchHtml(buildUrl(query, i + 2))),
+      Array.from({ length: pages - 1 }, (_, i) => loadSearchPage(buildUrl(query, i + 2), AMAZON_SOURCE)),
     );
     for (const page of rest) {
-      if (page.status === "fulfilled") offers.push(...parseAmazonHtml(page.value, fetchedAt));
+      if (page.status === "fulfilled") offers.push(...parseAmazonHtml(page.value.html, fetchedAt));
     }
 
     const seen = new Set<string>();

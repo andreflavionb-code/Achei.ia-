@@ -125,7 +125,64 @@ async function run() {
   }
 }
 
-run().catch((err) => {
+async function runBrowser() {
+  console.log(`\n${"=".repeat(80)}\nNAVEGADOR (Playwright/Chromium)`);
+  const { fetchHtmlWithBrowser, closeBrowser } = await import("../lib/offers/browser");
+  const waits: Record<string, string> = {
+    mercadolivre: "li.ui-search-layout__item, .poly-card",
+    magalu: '[data-testid="product-card-container"], script#__NEXT_DATA__',
+    amazon: 'div[data-component-type="s-search-result"]',
+  };
+  for (const t of targets) {
+    const started = Date.now();
+    try {
+      const page = await fetchHtmlWithBrowser(t.url, waits[t.name]);
+      console.log(`\n[${t.name}] ${page.html.length} bytes  ${Date.now() - started}ms  final: ${page.finalUrl}`);
+      await writeFile(`.debug/${t.name}-browser.html`, page.html, "utf8");
+      const root = parse(page.html);
+      console.log("  title:", root.querySelector("title")?.textContent.trim().slice(0, 120));
+      for (const sel of t.selectors) {
+        let n = 0;
+        try { n = root.querySelectorAll(sel).length; } catch { n = -1; }
+        console.log(`  ${sel.padEnd(48)} ${n}`);
+      }
+      console.log("  marcadores:", t.markers.map((m) => `${m}=${page.html.includes(m) ? "sim" : "não"}`).join("  "));
+      const firstCard =
+        t.name === "mercadolivre"
+          ? root.querySelector("li.ui-search-layout__item, .poly-card")
+          : t.name === "magalu"
+            ? root.querySelector('[data-testid="product-card-container"]')
+            : root.querySelector('div[data-component-type="s-search-result"]');
+      console.log("\n  --- primeiro card ---");
+      console.log(firstCard ? firstCard.outerHTML.slice(0, 7000) : page.html.slice(0, 2500));
+      if (t.name === "magalu") {
+        console.log("\n  --- __NEXT_DATA__ (trecho) ---");
+        console.log(snippet(page.html, "__NEXT_DATA__", 0, 4000));
+      }
+    } catch (err) {
+      console.log(`\n[${t.name}] ERRO no navegador: ${(err as Error).message}`);
+    }
+  }
+  await closeBrowser();
+}
+
+async function runMlApi() {
+  console.log(`\n${"=".repeat(80)}\nAPI MERCADO LIVRE sem token`);
+  try {
+    const res = await fetch(`https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(query)}&limit=3`, {
+      headers: { Accept: "application/json", "User-Agent": UA_CHROME },
+    });
+    const body = await res.text();
+    console.log(`HTTP ${res.status}  ${body.slice(0, 600)}`);
+  } catch (err) {
+    console.log(`ERRO: ${(err as Error).message}`);
+  }
+}
+
+run()
+  .then(runMlApi)
+  .then(runBrowser)
+  .catch((err) => {
   console.error(err);
   process.exit(1);
 });
