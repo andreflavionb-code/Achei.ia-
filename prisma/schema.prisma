@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Tokens OAuth de marketplaces (hoje só Mercado Livre). Um registro por provedor.
+model OAuthToken {
+  id             String   @id @default(cuid())
+  provider       String   @unique
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime
+  externalUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/// Alerta de preço: busca salva + preço máximo + e-mail de aviso.
+model Alert {
+  id               String    @id @default(cuid())
+  email            String
+  query            String
+  maxPrice         Float
+  interestFreeOnly Boolean   @default(false)
+  origin           String    @default("all") // "all" | "national" | "international"
+  freeShippingOnly Boolean   @default(false)
+  newOnly          Boolean   @default(false)
+  active           Boolean   @default(true)
+  /// Token secreto para cancelar o alerta pelo link do e-mail.
+  token            String    @unique @default(cuid())
+  lastCheckedAt    DateTime?
+  lastNotifiedAt   DateTime?
+  /// Menor preço já avisado; só avisa de novo se cair abaixo disso.
+  lastNotifiedPrice Float?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([active])
+  @@index([email])
+}
