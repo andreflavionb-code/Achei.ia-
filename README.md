@@ -32,6 +32,7 @@ Requisitos: Node 20+.
 
 ```bash
 npm install
+npm run browser:install  # baixa o Chromium usado pelo navegador invisível (uma vez)
 cp .env.example .env     # pode deixar tudo vazio para começar
 npm run db:push          # cria o banco SQLite local (achei.db)
 npm run dev              # http://localhost:3000
@@ -39,12 +40,22 @@ npm run dev              # http://localhost:3000
 
 Sem nenhum cadastro o site já busca produtos reais lendo as páginas públicas de busca de **Mercado Livre, Magazine Luiza e Amazon**. Isso se chama scraping e tem limites que você precisa conhecer:
 
+- **Os sites bloqueiam robôs.** Mercado Livre redireciona para uma "verificação de conta", Magazine Luiza usa Akamai (erro 403) e Amazon devolve 503 para servidores. Por isso o sistema tenta primeiro uma requisição simples e, se for bloqueado, abre um **navegador invisível** (Chromium via Playwright), que passa por essas verificações na maioria das vezes. Controle com `SCRAPE_MODE` no `.env`.
 - Depende do layout dos sites. Quando um site muda o HTML, o coletor para de reconhecer produtos, salva a página em `.debug/` e mostra o erro na interface (os outros sites continuam).
-- A Amazon bloqueia robôs com frequência (captcha). De um computador doméstico costuma funcionar; de servidores em nuvem, raramente.
-- Shopee, AliExpress e Casas Bahia não dão para ler assim: as páginas são montadas por JavaScript com proteções anti-robô. Esses só entram pela API de afiliados (etapa 2).
+- Shopee, AliExpress e Casas Bahia ainda não entram. Esses só pela API de afiliados (etapa 2) ou pelo mesmo navegador invisível, depois que os três primeiros estiverem estáveis.
 - Para produção, o caminho certo são as APIs oficiais. Os coletores de página servem para validar a ideia.
 
 Para escolher as fontes: `SOURCES=mercadolivre,magalu` no `.env`. Para dados fictícios (teste de interface sem internet): `DEMO_MODE=1`.
+
+### Modo preciso
+
+Os sites misturam acessórios (capa, cabo, bateria, cage) com o produto buscado. O modo preciso, ligado por padrão, mantém só o que:
+
+1. contém no título todos os termos específicos da busca (marca, modelo, qualquer termo com número; palavras genéricas como "camera" não são exigidas);
+2. não tem palavra típica de acessório no título (a menos que a própria busca tenha, como "capa iphone 15");
+3. não custa menos de 10% da mediana do grupo (pega acessório que escapou das regras anteriores).
+
+A interface mostra quantos itens foram escondidos e tem o botão "Mostrar tudo". Na linha de comando, use `--tudo`.
 
 ### Testando pela linha de comando
 
@@ -114,6 +125,7 @@ Próximos candidatos, em ordem de facilidade: Shopee (API de afiliados), AliExpr
 | `npm run db:push` | Cria/atualiza as tabelas do banco |
 | `npm run alerts:check` | Verifica os alertas uma vez (linha de comando) |
 | `npm run probe -- "termo"` | Busca pela linha de comando e mostra o resultado por site |
+| `npm run browser:install` | Baixa o Chromium do navegador invisível |
 | `npm test` | Testes dos parsers |
 | `npm run typecheck` | Checagem de tipos |
 | `npm run lint` | Lint |
