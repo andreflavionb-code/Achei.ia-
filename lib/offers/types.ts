@@ -3,7 +3,7 @@
  * para que ordenação e filtros rodem no nosso lado, não na API de origem.
  */
 
-export type SourceId = "mercadolivre" | "demo";
+export type SourceId = "mercadolivre" | "magalu" | "amazon" | "demo";
 
 export interface Installments {
   /** Número de parcelas (ex.: 12). */

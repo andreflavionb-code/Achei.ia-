@@ -43,3 +43,6 @@ next-env.d.ts
 # banco local
 *.db
 *.db-journal
+
+# HTML salvo pelos coletores para depuração
+/.debug/

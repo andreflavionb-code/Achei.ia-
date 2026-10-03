@@ -22,7 +22,7 @@ usuário -> /api/search -> adaptadores (Mercado Livre, ...) -> modelo único de 
 | --- | --- |
 | Ordenar do menor para o maior sem perder itens | Feito. Buscamos várias páginas sem ordenação e ordenamos aqui. |
 | Filtrar "sem juros" e "nacional/internacional" | Funciona onde a API informa. Mercado Livre informa; outros marketplaces informam menos. |
-| Buscar em Shopee, Amazon, AliExpress, Magalu | Possível via APIs de afiliados. Cada uma precisa de aprovação própria. Ainda não implementado (veja "Adicionando um marketplace"). |
+| Buscar em vários sites sem cadastro | Mercado Livre, Magazine Luiza e Amazon: feito, lendo a página pública (frágil, veja abaixo). Shopee, AliExpress, Casas Bahia: só via API de afiliados. |
 | Comprar sem sair do site | **Não é possível.** Nenhum marketplace permite checkout por terceiros. O caminho é o link de afiliado, com comissão por venda. |
 | Cobrar por clique das lojas | Exige contrato direto e volume. Comece pela comissão de afiliado. |
 
@@ -32,16 +32,37 @@ Requisitos: Node 20+.
 
 ```bash
 npm install
-cp .env.example .env     # preencha o que tiver (pode deixar vazio no começo)
+cp .env.example .env     # pode deixar tudo vazio para começar
 npm run db:push          # cria o banco SQLite local (achei.db)
 npm run dev              # http://localhost:3000
 ```
 
-Sem credenciais o site roda em **modo de exemplo**: os resultados são fictícios, mas a interface, filtros, ordenação e alertas funcionam. Isso serve para testar o fluxo inteiro.
+Sem nenhum cadastro o site já busca produtos reais lendo as páginas públicas de busca de **Mercado Livre, Magazine Luiza e Amazon**. Isso se chama scraping e tem limites que você precisa conhecer:
 
-## Conectando o Mercado Livre (dados reais)
+- Depende do layout dos sites. Quando um site muda o HTML, o coletor para de reconhecer produtos, salva a página em `.debug/` e mostra o erro na interface (os outros sites continuam).
+- A Amazon bloqueia robôs com frequência (captcha). De um computador doméstico costuma funcionar; de servidores em nuvem, raramente.
+- Shopee, AliExpress e Casas Bahia não dão para ler assim: as páginas são montadas por JavaScript com proteções anti-robô. Esses só entram pela API de afiliados (etapa 2).
+- Para produção, o caminho certo são as APIs oficiais. Os coletores de página servem para validar a ideia.
 
-Ser afiliado **não** dá acesso à API de busca. Para o sistema consultar produtos, o Mercado Livre exige um aplicativo registrado. É gratuito e leva alguns minutos:
+Para escolher as fontes: `SOURCES=mercadolivre,magalu` no `.env`. Para dados fictícios (teste de interface sem internet): `DEMO_MODE=1`.
+
+### Testando pela linha de comando
+
+```bash
+npm run probe -- "iphone 15"
+npm run probe -- "iphone 15" --sem-juros --nacional --max 4000 --novo
+npm test                 # testes dos parsers com HTML de exemplo
+```
+
+O `probe` mostra quantos itens cada site devolveu, o erro de cada um que falhou, e confere se a ordenação ficou crescente.
+
+### Senha de acesso
+
+Defina `APP_PASSWORD` no `.env` para que só quem tem a senha use o site. Sem essa variável o site fica aberto (bom para uso local, ruim para publicar).
+
+## Conectando o Mercado Livre pela API oficial (opcional)
+
+Mais estável que ler a página, e necessário quando o volume crescer. Ser afiliado **não** dá acesso à API de busca; o Mercado Livre exige um aplicativo registrado. É gratuito e leva alguns minutos:
 
 1. Acesse <https://developers.mercadolivre.com.br/> e entre com sua conta normal do Mercado Livre.
 2. Vá em **Minhas aplicações** e crie uma aplicação.
@@ -49,7 +70,7 @@ Ser afiliado **não** dá acesso à API de busca. Para o sistema consultar produ
 4. Copie o **App ID** para `ML_CLIENT_ID` e a **Secret Key** para `ML_CLIENT_SECRET` no `.env`.
 5. Reinicie o `npm run dev` e abra <http://localhost:3000/api/auth/mercadolivre>. Autorize o aplicativo. O token fica salvo no banco e é renovado sozinho.
 
-Depois disso, a busca passa a trazer resultados reais do Mercado Livre.
+Depois disso, a busca do Mercado Livre passa a usar a API no lugar da leitura da página.
 
 ### Links de afiliado
 
@@ -92,5 +113,7 @@ Próximos candidatos, em ordem de facilidade: Shopee (API de afiliados), AliExpr
 | `npm run build` | Build de produção |
 | `npm run db:push` | Cria/atualiza as tabelas do banco |
 | `npm run alerts:check` | Verifica os alertas uma vez (linha de comando) |
+| `npm run probe -- "termo"` | Busca pela linha de comando e mostra o resultado por site |
+| `npm test` | Testes dos parsers |
 | `npm run typecheck` | Checagem de tipos |
 | `npm run lint` | Lint |
