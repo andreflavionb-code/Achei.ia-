@@ -1,0 +1,34 @@
+name: Diagnóstico dos coletores
+
+# Roda a busca a partir de um servidor do GitHub (com internet livre) e
+# imprime o que cada site devolveu. Disparo manual: Actions > Diagnóstico.
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: "Termo de busca"
+        default: "camera sony fx3"
+        required: true
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Diagnóstico de cada site
+        run: npx tsx scripts/diag.ts "${{ github.event.inputs.query }}"
+      - name: Busca completa (probe)
+        run: npm run probe -- "${{ github.event.inputs.query }}"
+      - name: Guardar HTML coletado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: html-coletado
+          path: .debug/
+          if-no-files-found: ignore
