@@ -3,6 +3,12 @@ name: Diagnóstico dos coletores
 # Roda a busca a partir de um servidor do GitHub (com internet livre) e
 # imprime o que cada site devolveu. Disparo manual: Actions > Diagnóstico.
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnostico.yml"
+      - "scripts/diag.ts"
+      - "lib/offers/**"
   workflow_dispatch:
     inputs:
       query:
@@ -22,9 +28,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Diagnóstico de cada site
-        run: npx tsx scripts/diag.ts "${{ github.event.inputs.query }}"
+        run: npx tsx scripts/diag.ts "${{ github.event.inputs.query || 'camera sony fx3' }}"
       - name: Busca completa (probe)
-        run: npm run probe -- "${{ github.event.inputs.query }}"
+        run: npm run probe -- "${{ github.event.inputs.query || 'camera sony fx3' }}"
       - name: Guardar HTML coletado
         if: always()
         uses: actions/upload-artifact@v4
