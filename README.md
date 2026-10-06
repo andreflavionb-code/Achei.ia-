@@ -31,12 +31,13 @@ usuário -> /api/search -> adaptadores (Mercado Livre, ...) -> modelo único de 
 Requisitos: Node 20+.
 
 ```bash
-npm install
-npm run browser:install  # baixa o Chromium usado pelo navegador invisível (uma vez)
-cp .env.example .env     # pode deixar tudo vazio para começar
-npm run db:push          # cria o banco SQLite local (achei.db)
+npm run setup            # instala tudo, baixa o Chromium, cria o banco e verifica
 npm run dev              # http://localhost:3000
 ```
+
+Depois de cada `git pull`, rode `npm run setup` de novo (dependências e banco podem ter mudado).
+
+Se algo não funcionar, `npm run doctor` lista o que está faltando e o comando para corrigir. Para pedir ajuda, mande a saída do `npm run doctor`, a saída completa do `npm run dev` e o que aparece no navegador.
 
 Sem nenhum cadastro o site já busca produtos reais lendo as páginas públicas de busca de **Mercado Livre, Magazine Luiza e Amazon**. Isso se chama scraping e tem limites que você precisa conhecer:
 
@@ -126,6 +127,8 @@ Próximos candidatos, em ordem de facilidade: Shopee (API de afiliados), AliExpr
 | `npm run alerts:check` | Verifica os alertas uma vez (linha de comando) |
 | `npm run probe -- "termo"` | Busca pela linha de comando e mostra o resultado por site |
 | `npm run browser:install` | Baixa o Chromium do navegador invisível |
+| `npm run setup` | Instala tudo, baixa o Chromium, cria o banco e roda o doctor |
+| `npm run doctor` | Verifica a instalação e diz o que falta |
 | `npm test` | Testes dos parsers |
 | `npm run typecheck` | Checagem de tipos |
 | `npm run lint` | Lint |

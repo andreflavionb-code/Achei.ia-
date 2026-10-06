@@ -14,7 +14,9 @@
     "postinstall": "prisma generate",
     "probe": "tsx scripts/probe.ts",
     "test": "tsx --test tests/*.test.ts",
-    "browser:install": "playwright install chromium"
+    "browser:install": "playwright install chromium",
+    "doctor": "tsx scripts/doctor.ts",
+    "setup": "npm install && npm run browser:install && npm run db:push && npm run doctor"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
