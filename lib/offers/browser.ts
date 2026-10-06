@@ -21,7 +21,12 @@ import { ScrapeError } from "./html";
 const NAV_TIMEOUT_MS = Number(process.env.BROWSER_TIMEOUT_MS ?? 30000);
 const WAIT_SELECTOR_MS = Number(process.env.BROWSER_WAIT_MS ?? 15000);
 
-let contextPromise: Promise<BrowserContext> | null = null;
+/**
+ * O contexto fica em globalThis: em `next dev`, o hot reload recria este
+ * módulo a cada edição e, sem isso, abriria um segundo Chrome no mesmo
+ * perfil (o primeiro continuaria aberto e as páginas em uso quebrariam).
+ */
+const globalState = globalThis as unknown as { __acheiBrowser?: Promise<BrowserContext> | null };
 
 export function scrapeMode(): "auto" | "browser" | "plain" {
   const mode = process.env.SCRAPE_MODE?.trim();
@@ -73,18 +78,19 @@ async function launchContext(): Promise<BrowserContext> {
 }
 
 async function getContext(): Promise<BrowserContext> {
-  if (!contextPromise) {
-    contextPromise = launchContext();
-    contextPromise.catch(() => {
-      contextPromise = null;
+  if (!globalState.__acheiBrowser) {
+    const promise = launchContext();
+    globalState.__acheiBrowser = promise;
+    promise.catch(() => {
+      if (globalState.__acheiBrowser === promise) globalState.__acheiBrowser = null;
     });
-    contextPromise.then((ctx) => {
+    promise.then((ctx) => {
       ctx.on("close", () => {
-        contextPromise = null;
+        if (globalState.__acheiBrowser === promise) globalState.__acheiBrowser = null;
       });
     });
   }
-  return contextPromise;
+  return globalState.__acheiBrowser;
 }
 
 export interface BrowserPage {
@@ -123,8 +129,9 @@ export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string
 }
 
 export async function closeBrowser(): Promise<void> {
-  if (!contextPromise) return;
-  const ctx = await contextPromise.catch(() => null);
-  contextPromise = null;
+  const promise = globalState.__acheiBrowser;
+  if (!promise) return;
+  globalState.__acheiBrowser = null;
+  const ctx = await promise.catch(() => null);
   await ctx?.close().catch(() => undefined);
 }
