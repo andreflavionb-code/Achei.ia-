@@ -4,6 +4,10 @@
 
 cd "$(dirname "$0")"
 
+# Alguns Macs têm NODE_ENV=production definido no sistema; isso pula pacotes
+# de desenvolvimento e confunde o Next. Aqui forçamos o modo de desenvolvimento.
+export NODE_ENV=development
+
 echo ""
 echo "╔══════════════════════════════════════╗"
 echo "║           Achei - Iniciando          ║"
@@ -26,7 +30,7 @@ echo ""
 # Instala dependências quando o package.json mudou ou na primeira vez
 if [ ! -d "node_modules" ] || [ package.json -nt node_modules/.package-lock.json ]; then
     echo "Instalando dependências..."
-    npm install
+    npm install --include=dev
     echo ""
 fi
 
@@ -45,22 +49,20 @@ echo "Verificando banco de dados..."
 npm run db:push --silent
 echo ""
 
-# Encerra servidor antigo na porta 3000, se houver
-OLD=$(lsof -ti tcp:3000 2>/dev/null)
-if [ -n "$OLD" ]; then
-    echo "Encerrando servidor anterior na porta 3000..."
-    kill $OLD 2>/dev/null
-    sleep 1
-fi
+# Escolhe uma porta livre (não derruba outros programas que estejam na 3000)
+PORT=3000
+for candidate in 3000 3010 3020 3030; do
+    if ! lsof -ti tcp:$candidate >/dev/null 2>&1; then PORT=$candidate; break; fi
+done
 
-echo "Servidor iniciando em: http://localhost:3000"
+echo "Servidor iniciando em: http://localhost:$PORT"
 echo "Pressione Ctrl+C para parar."
 echo ""
 
 # Abre o navegador quando o servidor responder
 ( for i in $(seq 1 60); do
-    if curl -s -o /dev/null http://localhost:3000/api/status; then open "http://localhost:3000"; exit 0; fi
+    if curl -s -o /dev/null "http://localhost:$PORT/api/status"; then open "http://localhost:$PORT"; exit 0; fi
     sleep 1
   done ) &
 
-npm run dev
+npx next dev -p "$PORT"

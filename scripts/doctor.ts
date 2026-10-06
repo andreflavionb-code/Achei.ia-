@@ -13,6 +13,14 @@ const add = (ok: boolean, label: string, fix?: string) => results.push({ ok, lab
 const major = Number(process.versions.node.split(".")[0]);
 add(major >= 20, `Node ${process.versions.node}`, "Instale o Node 20 ou mais novo: https://nodejs.org");
 
+// 1b. NODE_ENV forçado no sistema atrapalha a instalação e o modo dev
+const nodeEnv = process.env.NODE_ENV;
+add(
+  !nodeEnv || nodeEnv === "development",
+  nodeEnv ? `NODE_ENV=${nodeEnv} definido no sistema` : "NODE_ENV não definido",
+  "Remova NODE_ENV do seu ~/.zshrc ou ~/.bash_profile, ou use o iniciar.command (ele corrige sozinho)",
+);
+
 // 2. Dependências
 for (const dep of ["next", "playwright", "node-html-parser", "@prisma/client", "zod", "nodemailer"]) {
   const ok = existsSync(path.join(root, "node_modules", dep));

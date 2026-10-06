@@ -41,6 +41,8 @@ npm run dev              # http://localhost:3000
 
 Depois de cada `git pull`, rode `npm run setup` de novo (dependências e banco podem ter mudado).
 
+Se a porta 3000 estiver ocupada por outro programa, o Next avisa no terminal e usa outra (por exemplo 3001). Abra o endereço que aparece na linha "Local:". O `iniciar.command` já escolhe uma porta livre e abre o navegador no endereço certo.
+
 Se algo não funcionar, `npm run doctor` lista o que está faltando e o comando para corrigir. Para pedir ajuda, mande a saída do `npm run doctor`, a saída completa do `npm run dev` e o que aparece no navegador.
 
 Sem nenhum cadastro o site já busca produtos reais lendo as páginas públicas de busca de **Mercado Livre, Magazine Luiza e Amazon**. Isso se chama scraping e tem limites que você precisa conhecer:
