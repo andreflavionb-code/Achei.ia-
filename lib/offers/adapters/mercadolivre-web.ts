@@ -97,6 +97,7 @@ function parseCard(card: HTMLElement, fetchedAt: string): Offer | null {
     externalId,
     title,
     price,
+    cardPrice: null,
     originalPrice: originalPrice && originalPrice > price ? originalPrice : null,
     currency: "BRL",
     installments,
@@ -129,14 +130,45 @@ const ML_SOURCE: PageSource = {
   name: "Mercado Livre",
   waitFor: "li.ui-search-layout__item, .poly-card, .ui-search-result__wrapper",
   isBlocked: (html, finalUrl) =>
-    /account-verification|\/gz\//i.test(finalUrl) ||
-    /suspicious-traffic-frontend|gz-account-verification/i.test(html),
+    /account-verification|\/gz\/|registration|\/hub\/registration|\/login\/identification|challenge_id=/i.test(finalUrl) ||
+    /suspicious-traffic-frontend|gz-account-verification/i.test(html) ||
+    (/Crie sua conta e compre|para iniciar sessão|Tenho um problema de segurança/i.test(html) && !/ui-search-layout__item|poly-card/.test(html)),
   isEmpty: (html) => /não encontramos|nenhum resultado|Não há anúncios/i.test(html),
 };
+
+/** Pausa entre páginas (1,2 a 2,5s): várias páginas em rajada acionam a verificação anti-robô do ML. */
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const politeDelay = () => sleep(1200 + Math.random() * 1300);
+
+/** Tempo de espera antes de tentar de novo quando o ML bloqueia (a verificação costuma ser passageira). */
+const RETRY_AFTER_MS = Number(process.env.ML_RETRY_AFTER_MS ?? 20000);
+
+async function loadFirstPage(query: string, parse: (html: string) => Offer[]) {
+  try {
+    return await loadAndParse(buildUrl(query, 0), ML_SOURCE, parse);
+  } catch (err) {
+    if (!(err instanceof ScrapeError) || !/bloqueou/i.test(err.message)) throw err;
+    // Uma segunda tentativa, depois de uma pausa, entrando pela home como um usuário faria.
+    await sleep(RETRY_AFTER_MS);
+    await loadAndParse("https://www.mercadolivre.com.br/", { ...ML_SOURCE, waitFor: "body" }, () => []).catch(() => undefined);
+    await politeDelay();
+    try {
+      return await loadAndParse(buildUrl(query, 0), ML_SOURCE, parse);
+    } catch (again) {
+      if (again instanceof ScrapeError && /bloqueou/i.test(again.message)) {
+        throw new ScrapeError(
+          "Mercado Livre pediu verificação anti-robô (acontece após muitas buscas seguidas). Aguarde alguns minutos, ou rode uma vez com BROWSER_VISIBLE=1 e resolva a verificação na janela. Alternativa estável: ML_CLIENT_ID/ML_CLIENT_SECRET (API oficial, veja o README).",
+        );
+      }
+      throw again;
+    }
+  }
+}
 
 export const mercadoLivreWebAdapter: MarketplaceAdapter = {
   id: "mercadolivre",
   name: "Mercado Livre",
+  transport: "browser",
 
   isConfigured() {
     return true;
@@ -147,7 +179,7 @@ export const mercadoLivreWebAdapter: MarketplaceAdapter = {
     const pages = Math.max(1, Math.ceil(options.maxResults / ITEMS_PER_PAGE));
 
     const parse = (html: string) => parseMercadoLivreHtml(html, fetchedAt);
-    const first = await loadAndParse(buildUrl(query, 0), ML_SOURCE, parse);
+    const first = await loadFirstPage(query, parse);
     const offers = first.items;
 
     if (offers.length === 0) {
@@ -158,9 +190,10 @@ export const mercadoLivreWebAdapter: MarketplaceAdapter = {
       );
     }
 
-    // Páginas seguintes em sequência (o navegador é compartilhado).
+    // Páginas seguintes em sequência, com pausa (o navegador é compartilhado).
     for (let i = 1; i < pages; i++) {
       try {
+        await politeDelay();
         const next = await loadAndParse(buildUrl(query, i * ITEMS_PER_PAGE), ML_SOURCE, parse);
         if (next.items.length === 0) break;
         offers.push(...next.items);

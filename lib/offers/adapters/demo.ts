@@ -33,6 +33,7 @@ function rng(seed: number) {
 export const demoAdapter: MarketplaceAdapter = {
   id: "demo",
   name: "Dados de exemplo",
+  transport: "demo",
 
   isConfigured() {
     return true;
@@ -64,7 +65,8 @@ export const demoAdapter: MarketplaceAdapter = {
         externalId: `${seed}-${i}`,
         title: `${query.trim()}${SUFFIXES[i % SUFFIXES.length]}`,
         price,
-        originalPrice: hasDiscount ? Math.round(price * 1.2 * 100) / 100 : null,
+        cardPrice: null,
+    originalPrice: hasDiscount ? Math.round(price * 1.2 * 100) / 100 : null,
         currency: "BRL",
         installments:
           installmentsCount > 1

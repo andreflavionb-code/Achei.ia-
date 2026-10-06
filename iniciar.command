@@ -66,6 +66,7 @@ for candidate in 3000 3010 3020 3030; do
 done
 
 echo "Servidor iniciando em: http://localhost:$PORT"
+echo "Mercado Livre, Magalu e Casas Bahia são lidos por um Chrome escondido fora da tela (não aparece janela)."
 echo "Pressione Ctrl+C para parar."
 echo ""
 

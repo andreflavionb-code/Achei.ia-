@@ -2,23 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { OriginFilter, SearchFilters, SearchResult } from "@/lib/offers/types";
+import type { ConditionFilter, OriginFilter, SearchFilters, SearchResult, SortKey, SourceId } from "@/lib/offers/types";
 import { formatBRL } from "@/lib/format";
 import { OfferRow } from "./OfferRow";
 import { AlertForm } from "./AlertForm";
-import { StatusBanner } from "./StatusBanner";
+import { StatusBanner, type Status } from "./StatusBanner";
 
 const PAGE_SIZE = 50;
 
 function filtersFromParams(params: URLSearchParams): SearchFilters {
   const maxPrice = Number(params.get("maxPrice"));
+  const sources = params.get("sources");
   return {
     interestFreeOnly: params.get("interestFreeOnly") === "1",
     origin: (params.get("origin") as OriginFilter) || "all",
     maxPrice: maxPrice > 0 ? maxPrice : null,
     freeShippingOnly: params.get("freeShippingOnly") === "1",
-    newOnly: params.get("newOnly") === "1",
+    condition: (params.get("condition") as ConditionFilter) || (params.get("newOnly") === "1" ? "new" : "all"),
     precise: params.get("precise") !== "0",
+    sort: (params.get("sort") as SortKey) || "price",
+    sources: sources ? (sources.split(",") as SourceId[]) : null,
   };
 }
 
@@ -29,10 +32,18 @@ function paramsFromState(query: string, filters: SearchFilters): URLSearchParams
   if (filters.origin !== "all") p.set("origin", filters.origin);
   if (filters.maxPrice) p.set("maxPrice", String(filters.maxPrice));
   if (filters.freeShippingOnly) p.set("freeShippingOnly", "1");
-  if (filters.newOnly) p.set("newOnly", "1");
+  if (filters.condition !== "all") p.set("condition", filters.condition);
   if (!filters.precise) p.set("precise", "0");
+  if (filters.sort !== "price") p.set("sort", filters.sort);
+  if (filters.sources) p.set("sources", filters.sources.join(","));
   return p;
 }
+
+const SORT_LABELS: Record<SortKey, string> = {
+  price: "Menor preço à vista",
+  card: "Menor preço no cartão",
+  installment: "Menor parcela",
+};
 
 export function SearchPage() {
   const router = useRouter();
@@ -44,12 +55,30 @@ export function SearchPage() {
   const [maxPriceInput, setMaxPriceInput] = useState(searchParams.get("maxPrice") ?? "");
   const [result, setResult] = useState<SearchResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [showAlert, setShowAlert] = useState(false);
+  const [showSources, setShowSources] = useState(false);
   const [visible, setVisible] = useState(PAGE_SIZE);
+  const [status, setStatus] = useState<Status | null>(null);
+
+  useEffect(() => {
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+
+  // Contador de segundos enquanto busca (as lojas via navegador levam 15-40s).
+  useEffect(() => {
+    if (!loading) return;
+    setElapsed(0);
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   const runSearch = useCallback(
-    async (q: string, f: SearchFilters) => {
+    async (q: string, f: SearchFilters, fresh = false) => {
       const trimmed = q.trim();
       if (trimmed.length < 2) return;
       setLoading(true);
@@ -58,7 +87,7 @@ export function SearchPage() {
       const params = paramsFromState(trimmed, f);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
       try {
-        const res = await fetch(`/api/search?${params.toString()}`);
+        const res = await fetch(`/api/search?${params.toString()}${fresh ? "&fresh=1" : ""}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Falha na busca");
         setResult(data as SearchResult);
@@ -89,26 +118,40 @@ export function SearchPage() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const maxPrice = Number(maxPriceInput.replace(",", "."));
+    const maxPrice = Number(maxPriceInput.replace(/\./g, "").replace(",", "."));
     const next = { ...filters, maxPrice: maxPrice > 0 ? maxPrice : null };
     setFilters(next);
     void runSearch(query, next);
+  }
+
+  const allSources = useMemo(() => status?.sources.filter((s) => s.kind !== "demo") ?? [], [status]);
+  const selectedSources = filters.sources ?? allSources.map((s) => s.id);
+
+  function toggleSource(id: SourceId) {
+    const set = new Set(selectedSources);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    const all = allSources.map((s) => s.id);
+    const next = all.filter((s) => set.has(s));
+    updateFilters({ sources: next.length === all.length || next.length === 0 ? null : next });
   }
 
   const okSources = useMemo(() => result?.sources.filter((s) => s.status === "ok") ?? [], [result]);
   const hiddenByPrecision = useMemo(() => okSources.reduce((n, s) => n + s.hiddenByPrecision, 0), [okSources]);
   const errorSources = useMemo(() => result?.sources.filter((s) => s.status === "error") ?? [], [result]);
 
+  const inputClass = "rounded border border-zinc-300 bg-white px-2 py-1";
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-16">
       <header className="pt-10 pb-6">
         <h1 className="text-3xl font-bold tracking-tight">Achei</h1>
         <p className="mt-1 text-zinc-600">
-          Busca em vários marketplaces de uma vez e ordena do menor para o maior preço, sem esconder resultados.
+          Busca em {allSources.length > 0 ? allSources.length : "vários"} lojas de uma vez e ordena de verdade do menor para o maior preço, sem esconder resultados.
         </p>
       </header>
 
-      <StatusBanner />
+      <StatusBanner status={status} />
 
       <form onSubmit={submit} className="mt-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div className="flex gap-2">
@@ -125,11 +168,21 @@ export function SearchPage() {
             disabled={loading || query.trim().length < 2}
             className="rounded-md bg-zinc-900 px-5 py-2.5 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
           >
-            {loading ? "Buscando..." : "Buscar"}
+            {loading ? `Buscando… ${elapsed}s` : "Buscar"}
           </button>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-zinc-700">
+          <label className="flex items-center gap-1.5">
+            Ordenar
+            <select value={filters.sort} onChange={(e) => updateFilters({ sort: e.target.value as SortKey })} className={inputClass}>
+              {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+                <option key={k} value={k}>
+                  {SORT_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5">
             <input
               type="checkbox"
@@ -139,15 +192,19 @@ export function SearchPage() {
             Só parcelamento sem juros
           </label>
           <label className="flex items-center gap-1.5">
+            Condição
+            <select value={filters.condition} onChange={(e) => updateFilters({ condition: e.target.value as ConditionFilter })} className={inputClass}>
+              <option value="all">Novos e usados</option>
+              <option value="new">Só novos</option>
+              <option value="used">Só usados</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5">
             Origem
-            <select
-              value={filters.origin}
-              onChange={(e) => updateFilters({ origin: e.target.value as OriginFilter })}
-              className="rounded border border-zinc-300 px-2 py-1"
-            >
-              <option value="all">Todas</option>
-              <option value="national">Nacional</option>
-              <option value="international">Internacional</option>
+            <select value={filters.origin} onChange={(e) => updateFilters({ origin: e.target.value as OriginFilter })} className={inputClass}>
+              <option value="all">Nacional e internacional</option>
+              <option value="national">Só nacional</option>
+              <option value="international">Só internacional</option>
             </select>
           </label>
           <label className="flex items-center gap-1.5">
@@ -157,10 +214,6 @@ export function SearchPage() {
               onChange={(e) => updateFilters({ freeShippingOnly: e.target.checked })}
             />
             Só frete grátis
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={filters.newOnly} onChange={(e) => updateFilters({ newOnly: e.target.checked })} />
-            Só novos
           </label>
           <label className="flex items-center gap-1.5" title="Esconde acessórios (capas, cabos, baterias) e itens que não batem com o que você digitou">
             <input type="checkbox" checked={filters.precise} onChange={(e) => updateFilters({ precise: e.target.checked })} />
@@ -177,7 +230,24 @@ export function SearchPage() {
               className="w-24 rounded border border-zinc-300 px-2 py-1"
             />
           </label>
+          {allSources.length > 0 && (
+            <button type="button" onClick={() => setShowSources((v) => !v)} className="text-zinc-600 underline">
+              Lojas ({selectedSources.length}/{allSources.length})
+            </button>
+          )}
         </div>
+
+        {showSources && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-zinc-100 pt-3 text-sm text-zinc-700">
+            {allSources.map((s) => (
+              <label key={s.id} className="flex items-center gap-1.5" title={s.kind === "browser" ? "Lida pelo Chrome escondido (mais lenta)" : "Leitura direta"}>
+                <input type="checkbox" checked={selectedSources.includes(s.id)} onChange={() => toggleSource(s.id)} />
+                {s.name}
+                {s.kind === "browser" && <span className="text-[10px] text-zinc-400">chrome</span>}
+              </label>
+            ))}
+          </div>
+        )}
       </form>
 
       {error && <p className="mt-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
@@ -186,8 +256,8 @@ export function SearchPage() {
         <section className="mt-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm text-zinc-700">
-              <strong>{result.offers.length}</strong> oferta(s) para &quot;{result.query}&quot;, ordenadas do menor
-              para o maior preço
+              <strong>{result.offers.length}</strong> oferta(s) para &quot;{result.query}&quot;, ordenadas por{" "}
+              {SORT_LABELS[result.filters.sort].toLowerCase()}
               {result.offers.length > 0 && (
                 <>
                   {" "}
@@ -195,18 +265,31 @@ export function SearchPage() {
                 </>
               )}
             </div>
-            <button
-              onClick={() => setShowAlert((v) => !v)}
-              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50"
-            >
-              Criar alerta de preço
-            </button>
+            <div className="flex gap-2">
+              {result.sources.some((s) => s.cached) && (
+                <button
+                  onClick={() => void runSearch(query, filters, true)}
+                  disabled={loading}
+                  title="Os resultados vêm de uma busca dos últimos 15 minutos; clique para consultar as lojas de novo"
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  Buscar de novo
+                </button>
+              )}
+              <button
+                onClick={() => setShowAlert((v) => !v)}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50"
+              >
+                Criar alerta de preço
+              </button>
+            </div>
           </div>
 
           <div className="mt-2 flex flex-wrap gap-2 text-xs">
             {okSources.map((s) => (
-              <span key={s.id} className="rounded-full bg-zinc-200 px-2.5 py-1 text-zinc-700">
+              <span key={s.id} className="rounded-full bg-zinc-200 px-2.5 py-1 text-zinc-700" title={s.cached ? "resultado recente (cache de 15 min)" : `${((s.ms ?? 0) / 1000).toFixed(1)}s`}>
                 {s.name}: {s.shown} de {s.fetched}
+                {s.cached && " ·"}
               </span>
             ))}
             {errorSources.map((s) => (

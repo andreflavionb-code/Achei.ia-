@@ -3,21 +3,39 @@ import { mercadoLivreAdapter } from "./mercadolivre";
 import { mercadoLivreWebAdapter } from "./mercadolivre-web";
 import { magaluAdapter } from "./magalu";
 import { amazonAdapter } from "./amazon";
+import { casasBahiaAdapter } from "./casasbahia";
+import { americanasAdapter } from "./americanas";
+import { carrefourAdapter } from "./carrefour";
+import { kabumAdapter } from "./kabum";
+import { aliExpressAdapter } from "./aliexpress";
+import { buscapeAdapter } from "./buscape";
 import { demoAdapter } from "./demo";
 
 /**
  * Registro de marketplaces.
  *
- * - Coletores de página pública (sem cadastro): Mercado Livre, Magazine
- *   Luiza, Amazon. Ligados por padrão; escolha com SOURCES=mercadolivre,magalu.
+ * - Leitura direta (requisição simples, sem navegador): Amazon, Americanas,
+ *   Carrefour, KaBuM!, AliExpress, Buscapé.
+ * - Navegador escondido (sites que bloqueiam robôs): Mercado Livre,
+ *   Magazine Luiza, Casas Bahia.
  * - API oficial do Mercado Livre: usada no lugar do coletor de página
  *   quando ML_CLIENT_ID/ML_CLIENT_SECRET estão definidos.
  * - DEMO_MODE=1 acrescenta dados de exemplo.
  *
- * Para adicionar um marketplace, crie um adaptador em ./ e inclua em
- * WEB_ADAPTERS (ou nos oficiais, se exigir credenciais).
+ * Escolha as fontes com SOURCES=mercadolivre,magalu,... no .env.
+ * Para adicionar um marketplace, crie um adaptador em ./ e inclua em WEB_ADAPTERS.
  */
-const WEB_ADAPTERS: MarketplaceAdapter[] = [mercadoLivreWebAdapter, magaluAdapter, amazonAdapter];
+const WEB_ADAPTERS: MarketplaceAdapter[] = [
+  mercadoLivreWebAdapter,
+  amazonAdapter,
+  magaluAdapter,
+  casasBahiaAdapter,
+  americanasAdapter,
+  carrefourAdapter,
+  kabumAdapter,
+  aliExpressAdapter,
+  buscapeAdapter,
+];
 
 function enabledSourceIds(): Set<SourceId> | null {
   const raw = process.env.SOURCES?.trim();

@@ -1,28 +1,48 @@
 # Achei
 
-Agregador de ofertas que busca em vários marketplaces ao mesmo tempo, ordena **de verdade** do menor para o maior preço (sem o corte de resultados que os sites aplicam), filtra por parcelamento sem juros, origem nacional/internacional e frete, e avisa por e-mail quando um produto aparece dentro do preço que você quer pagar.
+Agregador de ofertas que busca em **9 lojas ao mesmo tempo** (Mercado Livre, Amazon, Magazine Luiza, Casas Bahia, Americanas, Carrefour, KaBuM!, AliExpress e Buscapé), ordena **de verdade** do menor para o maior preço (sem o corte de resultados que os sites aplicam), filtra por parcelamento sem juros, novo/usado, origem nacional/internacional e frete, e avisa por e-mail quando um produto aparece dentro do preço que você quer pagar.
 
 ## Como funciona
 
 ```
-usuário -> /api/search -> adaptadores (Mercado Livre, ...) -> modelo único de oferta
-                              |
-                              v
-                 filtros + ordenação no NOSSO servidor -> lista unificada
+usuário -> /api/search -> 9 coletores em paralelo -> modelo único de oferta
+                               |
+                               v
+             normalização + filtros + ordenação no NOSSO servidor -> lista unificada
 ```
 
-- **Adaptadores** (`lib/offers/adapters/`): um por marketplace. Cada um converte a resposta da API de origem para o modelo único `Offer` (`lib/offers/types.ts`).
-- **Busca unificada** (`lib/offers/search.ts`): chama todos os adaptadores em paralelo, aplica os filtros e ordena por preço. Se um marketplace falhar, os outros continuam.
-- **Alertas** (`lib/alerts/check.ts`): busca salva + preço máximo + e-mail. Um job agendado refaz a busca e envia e-mail quando acha oferta dentro do preço.
-- **Links de afiliado** (`lib/mercadolivre/affiliate.ts`): a compra acontece no marketplace; a comissão vem do link rastreado.
+- **Coletores** (`lib/offers/adapters/`): um por loja. Cada um converte a página ou API da loja para o modelo único `Offer` (`lib/offers/types.ts`), com **preço à vista** (Pix/boleto quando a loja dá desconto) e **preço no cartão** separados, parcelas (com ou sem juros), origem e condição.
+- **Busca unificada** (`lib/offers/search.ts`): chama todos em paralelo (20 a 40s), infere "usado" pelo título quando a loja não marca, remove duplicatas, aplica os filtros e ordena pelo critério escolhido (à vista, no cartão ou menor parcela). Se uma loja falhar, as outras continuam e o erro aparece por loja.
+- **Cache de 15 minutos** por loja e termo: mudar filtro ou ordenação é instantâneo e não volta às lojas (o botão "Buscar de novo" força). Isso também evita a verificação anti-robô do Mercado Livre, que aparece quando se faz muitas buscas em rajada.
+- **Modo preciso** (`lib/offers/relevance.ts`): esconde acessórios e outros modelos (quem busca "iphone 15" não vê iPhone 16 nem capinha). Botão "Mostrar tudo" desliga.
+- **Alertas** (`lib/alerts/check.ts` + `instrumentation.ts`): busca salva + preço máximo + e-mail. Enquanto o servidor estiver aberto, refaz as buscas a cada hora e envia e-mail quando acha oferta dentro do preço.
+- **Links de afiliado** (`lib/mercadolivre/affiliate.ts`): a compra acontece no marketplace; a comissão vem do link rastreado (etapa 2).
+
+### De onde vêm os dados (verificado em 06/10/2026)
+
+| Loja | Como é lida | Observação |
+| --- | --- | --- |
+| Amazon | Página pública, requisição direta | Rápida (2-5s). Às vezes a Amazon pede verificação; aí cai para o Chrome escondido. |
+| Americanas | API de catálogo (VTEX) | Rápida. Informa "Produto Internacional" e condição. |
+| Carrefour | API de busca (VTEX) | Rápida. Vários vendedores (marketplace). |
+| KaBuM! | Página pública (JSON embutido) | Rápida. Pix vs. cartão. |
+| AliExpress | Página pública em português (JSON embutido) | Rápida. Tudo internacional, preço em reais. |
+| Buscapé | Página pública (JSON embutido) | Rede de segurança: melhor oferta por produto entre as lojas que ele monitora. |
+| Mercado Livre | **Chrome escondido** | Bloqueia robôs (verificação de conta). Até 200 anúncios por busca. Depois de muitas buscas seguidas pede verificação por alguns minutos; o sistema espera e tenta de novo. Alternativa estável: API oficial (abaixo). |
+| Magazine Luiza | **Chrome escondido** | Bloqueia robôs (Akamai). |
+| Casas Bahia | **Chrome escondido** | Bloqueia robôs (Akamai); preços carregados por JavaScript. |
+
+**Chrome escondido**: esses três sites detectam qualquer navegador automatizado em modo invisível (headless), mas aceitam uma janela real. O sistema abre o Google Chrome instalado no seu Mac com um perfil próprio (`.browser-profile/`) e **posiciona a janela fora da tela**: ela existe, mas você não a vê. Se algum site pedir uma verificação manual, rode uma vez com `BROWSER_VISIBLE=1` no `.env`, resolva na janela e volte ao normal; a verificação fica guardada no perfil.
+
+**Shopee e Google Shopping** não entram ainda: a Shopee bloqueia qualquer acesso automatizado (até pelo Chrome) e o Google mostra captcha. O caminho para a Shopee é a API de afiliados (etapa 2, você já é afiliado).
 
 ### O que é e o que não é possível (leia antes de planejar)
 
 | Desejo | Situação real |
 | --- | --- |
-| Ordenar do menor para o maior sem perder itens | Feito. Buscamos várias páginas sem ordenação e ordenamos aqui. |
-| Filtrar "sem juros" e "nacional/internacional" | Funciona onde a API informa. Mercado Livre informa; outros marketplaces informam menos. |
-| Buscar em vários sites sem cadastro | Mercado Livre, Magazine Luiza e Amazon: feito, lendo a página pública (frágil, veja abaixo). Shopee, AliExpress, Casas Bahia: só via API de afiliados. |
+| Ordenar do menor para o maior sem perder itens | Feito. Buscamos várias páginas de cada loja e ordenamos aqui. |
+| Filtrar "sem juros", "novo/usado", "nacional/internacional" | Feito. Onde a loja não informa, o item não é excluído (origem "?"). |
+| Comparar preço à vista e no cartão | Feito. Cada oferta mostra os dois quando diferem; a ordenação pode ser por qualquer um ou pela parcela. |
 | Comprar sem sair do site | **Não é possível.** Nenhum marketplace permite checkout por terceiros. O caminho é o link de afiliado, com comissão por venda. |
 | Cobrar por clique das lojas | Exige contrato direto e volume. Comece pela comissão de afiliado. |
 
@@ -45,14 +65,13 @@ Se a porta 3000 estiver ocupada por outro programa, o Next avisa no terminal e u
 
 Se algo não funcionar, `npm run doctor` lista o que está faltando e o comando para corrigir. Para pedir ajuda, mande a saída do `npm run doctor`, a saída completa do `npm run dev` e o que aparece no navegador.
 
-Sem nenhum cadastro o site já busca produtos reais lendo as páginas públicas de busca de **Mercado Livre, Magazine Luiza e Amazon**. Isso se chama scraping e tem limites que você precisa conhecer:
+Sem nenhum cadastro o site já busca produtos reais nas 9 lojas da tabela acima. Isso se chama scraping e tem limites:
 
-- **Os sites bloqueiam robôs.** Mercado Livre redireciona para uma "verificação de conta", Magazine Luiza usa Akamai (erro 403) e Amazon devolve 503 para servidores. Por isso o sistema tenta primeiro uma requisição simples e, se for bloqueado ou vier vazio, abre um **navegador de verdade** (Google Chrome, se instalado, ou o Chromium do Playwright) com perfil persistente em `.browser-profile/`. **Uma janela do navegador aparece por alguns segundos durante a busca**: é normal, é o sistema lendo as lojas. O modo invisível (`BROWSER_HEADLESS=1`) existe, mas esses sites costumam detectá-lo. Se um site mostrar uma verificação na janela, resolva uma vez; ela fica guardada no perfil.
-- Depende do layout dos sites. Quando um site muda o HTML, o coletor para de reconhecer produtos, salva a página em `.debug/` e mostra o erro na interface (os outros sites continuam).
-- Shopee, AliExpress e Casas Bahia ainda não entram. Esses só pela API de afiliados (etapa 2) ou pelo mesmo navegador invisível, depois que os três primeiros estiverem estáveis.
-- Para produção, o caminho certo são as APIs oficiais. Os coletores de página servem para validar a ideia.
+- Depende do layout dos sites. Quando um site muda o HTML, o coletor para de reconhecer produtos, salva a página em `.debug/` e mostra o erro na interface (os outros sites continuam). Os testes (`npm test`) guardam o formato de cada site para detectar isso.
+- O Chrome escondido precisa do Google Chrome instalado (ou do Chromium que `npm run setup` baixa). Ele fica aberto entre buscas enquanto o servidor roda, para ser rápido.
+- Para produção com muitos usuários, o caminho certo são as APIs oficiais/afiliados.
 
-Para escolher as fontes: `SOURCES=mercadolivre,magalu` no `.env`. Para dados fictícios (teste de interface sem internet): `DEMO_MODE=1`.
+Para escolher as fontes: `SOURCES=mercadolivre,magalu` no `.env`, ou pelo botão "Lojas" na interface. Para dados fictícios (teste de interface sem internet): `DEMO_MODE=1`.
 
 ### Modo preciso
 
@@ -69,6 +88,8 @@ A interface mostra quantos itens foram escondidos e tem o botão "Mostrar tudo".
 ```bash
 npm run probe -- "iphone 15"
 npm run probe -- "iphone 15" --sem-juros --nacional --max 4000 --novo
+npm run probe -- "iphone 15" --usado --cartao            # só usados, ordenado pelo preço no cartão
+npm run probe -- "notebook" --parcela --fontes kabum,amazon   # menor parcela, só nessas lojas
 npm test                 # testes dos parsers com HTML de exemplo
 ```
 
@@ -80,7 +101,7 @@ Defina `APP_PASSWORD` no `.env` para que só quem tem a senha use o site. Sem es
 
 ## Conectando o Mercado Livre pela API oficial (opcional)
 
-Mais estável que ler a página, e necessário quando o volume crescer. Ser afiliado **não** dá acesso à API de busca; o Mercado Livre exige um aplicativo registrado. É gratuito e leva alguns minutos:
+Mais estável que ler a página (não depende do Chrome nem sofre a verificação anti-robô), e necessário quando o volume crescer. Ser afiliado **não** dá acesso à API de busca; o Mercado Livre exige um aplicativo registrado. É gratuito e leva alguns minutos. **Basta o App ID e a Secret Key**: com eles no `.env` a busca já funciona com um token de aplicativo, sem precisar autorizar a conta (passo 5, opcional).
 
 1. Acesse <https://developers.mercadolivre.com.br/> e entre com sua conta normal do Mercado Livre.
 2. Vá em **Minhas aplicações** e crie uma aplicação.
@@ -100,7 +121,7 @@ Depois disso, a busca do Mercado Livre passa a usar a API no lugar da leitura da
 
 1. Preencha `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` e `EMAIL_FROM`. Com Gmail, use uma **senha de app** (Conta Google > Segurança > Senhas de app).
 2. Defina `CRON_SECRET` com qualquer texto longo.
-3. Agende a verificação:
+3. Pronto: enquanto o servidor estiver aberto (`iniciar.command` ou `npm run dev`), os alertas são verificados sozinhos a cada hora (`ALERTS_INTERVAL_MIN`, 0 desliga). Em outros ambientes:
    - **Vercel**: o `vercel.json` já agenda `/api/cron/check-alerts` de hora em hora. Basta definir `CRON_SECRET` nas variáveis do projeto.
    - **Outro servidor**: chame `GET /api/cron/check-alerts` com o header `Authorization: Bearer <CRON_SECRET>`, ou rode `npm run alerts:check` no crontab.
 
@@ -117,11 +138,11 @@ Regras do alerta: avisa quando aparece oferta dentro do preço máximo; depois s
 
 ## Adicionando um marketplace
 
-1. Crie `lib/offers/adapters/<nome>.ts` implementando `MarketplaceAdapter` (`id`, `name`, `isConfigured()`, `search()`).
-2. Converta cada item para `Offer`. Campos que a API não informa ficam `null` (os filtros tratam `null` como "desconhecido").
-3. Registre em `lib/offers/adapters/index.ts` e adicione o `SourceId` em `lib/offers/types.ts`.
+1. Crie `lib/offers/adapters/<nome>.ts` implementando `MarketplaceAdapter` (`id`, `name`, `transport`, `isConfigured()`, `search()`). Lojas na plataforma VTEX (Americanas, Carrefour, Extra, Pontofrio...) reaproveitam `vtex.ts`; sites que bloqueiam robôs usam `loadAndParse` (requisição direta e, se bloqueado, Chrome escondido).
+2. Converta cada item para `Offer`. Campos que a loja não informa ficam `null` (os filtros tratam `null` como "desconhecido").
+3. Registre em `lib/offers/adapters/index.ts`, adicione o `SourceId` em `lib/offers/types.ts` e em `SOURCE_IDS` (`lib/offers/parse.ts`), e um teste em `tests/fontes.test.ts` com um trecho real da página.
 
-Próximos candidatos, em ordem de facilidade: Shopee (API de afiliados), AliExpress (API de afiliados), Amazon (Product Advertising API, exige vendas prévias como associado), Magalu e Casas Bahia (via redes como Awin).
+Próximos candidatos: Shopee (API de afiliados), Pontofrio e Extra (mesmo sistema da Casas Bahia), Fast Shop, Pichau/Terabyte (bloqueiam; Chrome escondido).
 
 ## Scripts
 

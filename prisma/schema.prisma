@@ -27,7 +27,7 @@ model Alert {
   interestFreeOnly Boolean   @default(false)
   origin           String    @default("all") // "all" | "national" | "international"
   freeShippingOnly Boolean   @default(false)
-  newOnly          Boolean   @default(false)
+  condition        String    @default("all") // "all" | "new" | "used"
   precise          Boolean   @default(true)
   active           Boolean   @default(true)
   /// Token secreto para cancelar o alerta pelo link do e-mail.

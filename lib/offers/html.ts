@@ -173,6 +173,63 @@ export function findProductArrays(root: unknown, minLength = 3): Record<string, 
   return found;
 }
 
+/** JSON do <script id="__NEXT_DATA__"> (sites em Next.js), ou null. */
+export function extractNextData(html: string): unknown | null {
+  return extractJsonScript(html, /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+}
+
+/**
+ * Busca JSON com cabeçalhos de navegador. Devolve status e corpo (já
+ * convertido quando possível), sem lançar erro em 4xx/5xx: quem chama decide.
+ */
+export async function fetchJson(url: string, extraHeaders: Record<string, string> = {}): Promise<{ status: number; json: unknown; text: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "application/json, text/plain, */*",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        ...extraHeaders,
+      },
+      signal: controller.signal,
+      redirect: "follow",
+      cache: "no-store",
+    });
+    const text = await res.text();
+    let json: unknown = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+    return { status: res.status, json, text };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ScrapeError(`${new URL(url).hostname} demorou mais de ${TIMEOUT_MS / 1000}s`);
+    }
+    throw new ScrapeError(`Falha ao acessar ${new URL(url).hostname}: ${(err as Error).message}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Lê um caminho "a.b.c" dentro de um objeto qualquer. */
+export function getPath(o: unknown, path: string): unknown {
+  return path.split(".").reduce<unknown>((acc, key) => (acc && typeof acc === "object" ? (acc as Record<string, unknown>)[key] : undefined), o);
+}
+
+export function asNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") return parseBRL(v);
+  return null;
+}
+
+export function asString(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
 export function extractJsonScript(html: string, pattern: RegExp): unknown | null {
   const match = html.match(pattern);
   if (!match?.[1]) return null;

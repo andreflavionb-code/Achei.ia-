@@ -3,7 +3,17 @@
  * para que ordenação e filtros rodem no nosso lado, não na API de origem.
  */
 
-export type SourceId = "mercadolivre" | "magalu" | "amazon" | "demo";
+export type SourceId =
+  | "mercadolivre"
+  | "magalu"
+  | "amazon"
+  | "casasbahia"
+  | "americanas"
+  | "carrefour"
+  | "kabum"
+  | "aliexpress"
+  | "buscape"
+  | "demo";
 
 export interface Installments {
   /** Número de parcelas (ex.: 12). */
@@ -23,7 +33,10 @@ export interface Offer {
   sourceName: string;
   externalId: string;
   title: string;
+  /** Menor preço à vista (Pix/boleto quando a loja dá desconto; senão o preço normal). */
   price: number;
+  /** Preço no cartão quando é diferente do à vista (base do parcelamento). null = igual ao price. */
+  cardPrice: number | null;
   originalPrice: number | null;
   currency: string;
   installments: Installments | null;
@@ -39,6 +52,14 @@ export interface Offer {
 }
 
 export type OriginFilter = "all" | "national" | "international";
+export type ConditionFilter = "all" | "new" | "used";
+/**
+ * Critério de ordenação (sempre crescente):
+ *  - price: menor preço à vista;
+ *  - card: menor preço no cartão (total parcelado);
+ *  - installment: menor valor da parcela.
+ */
+export type SortKey = "price" | "card" | "installment";
 
 export interface SearchFilters {
   /** Só ofertas com parcelamento sem juros. */
@@ -48,10 +69,13 @@ export interface SearchFilters {
   maxPrice: number | null;
   /** Só frete grátis. */
   freeShippingOnly: boolean;
-  /** Só produtos novos. */
-  newOnly: boolean;
+  /** Novo, usado ou ambos. */
+  condition: ConditionFilter;
   /** Modo preciso: esconde acessórios e itens que não batem com a busca. */
   precise: boolean;
+  sort: SortKey;
+  /** Lojas a consultar. null = todas as ativas. */
+  sources: SourceId[] | null;
 }
 
 export const DEFAULT_FILTERS: SearchFilters = {
@@ -59,8 +83,10 @@ export const DEFAULT_FILTERS: SearchFilters = {
   origin: "all",
   maxPrice: null,
   freeShippingOnly: false,
-  newOnly: false,
+  condition: "all",
   precise: true,
+  sort: "price",
+  sources: null,
 };
 
 export interface AdapterSearchOptions {
@@ -71,6 +97,8 @@ export interface AdapterSearchOptions {
 export interface MarketplaceAdapter {
   id: SourceId;
   name: string;
+  /** Como a origem é lida: "api" (oficial), "plain" (página/JSON público), "browser" (Chrome escondido). */
+  transport: "api" | "plain" | "browser" | "demo";
   /** false quando faltam credenciais; o adaptador fica inativo. */
   isConfigured(): boolean;
   search(query: string, options: AdapterSearchOptions): Promise<Offer[]>;
@@ -86,6 +114,10 @@ export interface SourceStatus {
   shown: number;
   /** Escondidas pelo modo preciso (acessórios etc.). */
   hiddenByPrecision: number;
+  /** Tempo da coleta, em ms. */
+  ms?: number;
+  /** true quando veio do cache (busca recente com o mesmo termo). */
+  cached?: boolean;
   error?: string;
 }
 

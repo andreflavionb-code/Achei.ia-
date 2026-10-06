@@ -56,6 +56,7 @@ function toOffer(item: MlItem, fetchedAt: string): Offer {
     externalId: item.id,
     title: item.title,
     price: item.price,
+    cardPrice: null,
     originalPrice: item.original_price ?? null,
     currency: item.currency_id,
     installments: inst
@@ -96,6 +97,7 @@ async function fetchPage(query: string, offset: number, token: string): Promise<
 export const mercadoLivreAdapter: MarketplaceAdapter = {
   id: "mercadolivre",
   name: "Mercado Livre",
+  transport: "api",
 
   isConfigured() {
     return getMlCredentials() !== null;

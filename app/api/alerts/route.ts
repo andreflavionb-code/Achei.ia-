@@ -26,7 +26,7 @@ export async function POST(request: Request) {
         interestFreeOnly: f.interestFreeOnly ?? false,
         origin: f.origin ?? "all",
         freeShippingOnly: f.freeShippingOnly ?? false,
-        newOnly: f.newOnly ?? false,
+        condition: f.condition ?? (f.newOnly ? "new" : "all"),
         precise: f.precise ?? true,
       },
     });
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
       interestFreeOnly: true,
       origin: true,
       freeShippingOnly: true,
-      newOnly: true,
+      condition: true,
       precise: true,
       lastCheckedAt: true,
       lastNotifiedAt: true,

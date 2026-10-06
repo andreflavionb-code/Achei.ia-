@@ -49,6 +49,7 @@ function parseCard(card: HTMLElement, fetchedAt: string): Offer | null {
     externalId: asin,
     title,
     price,
+    cardPrice: null,
     originalPrice: original && original > price ? original : null,
     currency: "BRL",
     installments,
@@ -88,6 +89,7 @@ const AMAZON_SOURCE: PageSource = {
 export const amazonAdapter: MarketplaceAdapter = {
   id: "amazon",
   name: "Amazon",
+  transport: "plain",
 
   isConfigured() {
     return true;

@@ -1,15 +1,17 @@
 /**
- * Navegador real (Chrome/Chromium via Playwright) para sites que bloqueiam
+ * Navegador real (Google Chrome via Playwright) para sites que bloqueiam
  * requisições simples e detectam automação: Mercado Livre (verificação
- * "tráfego suspeito"), Magazine Luiza (Akamai) e Amazon.
+ * "tráfego suspeito"), Magazine Luiza e Casas Bahia (Akamai).
  *
- * Usa um perfil persistente em .browser-profile/ (cookies e verificações
- * ficam guardados entre buscas) e, por padrão, uma janela VISÍVEL, porque
- * o modo invisível ainda é detectado por esses sites.
+ * Esses sites detectam o modo headless (até o "novo"). O que funciona é
+ * uma janela de verdade. Para não atrapalhar, a janela é aberta FORA DA
+ * TELA (posição -20000,-20000): existe, mas você não a vê. O perfil fica
+ * em .browser-profile/ (cookies e verificações guardados entre buscas).
  *
  * Variáveis:
  *   SCRAPE_MODE      auto (padrão) | browser | plain
- *   BROWSER_HEADLESS 0 (padrão, janela visível) | 1 (invisível, menos confiável)
+ *   BROWSER_VISIBLE  1 mostra a janela (útil se um site pedir verificação manual)
+ *   BROWSER_HEADLESS 1 força modo headless (costuma ser bloqueado)
  *   BROWSER_CHANNEL  chrome (Google Chrome instalado) | chromium (Playwright) | auto (padrão)
  */
 import path from "node:path";
@@ -30,6 +32,10 @@ function headless(): boolean {
   return process.env.BROWSER_HEADLESS?.trim() === "1";
 }
 
+function visible(): boolean {
+  return process.env.BROWSER_VISIBLE?.trim() === "1";
+}
+
 async function launchContext(): Promise<BrowserContext> {
   let pw: typeof import("playwright");
   try {
@@ -43,6 +49,9 @@ async function launchContext(): Promise<BrowserContext> {
   const channels: (string | undefined)[] =
     wanted === "auto" ? ["chrome", "chromium", undefined] : wanted === "chromium" ? ["chromium", undefined] : [wanted, "chromium", undefined];
 
+  const args = ["--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"];
+  if (!headless() && !visible()) args.push("--window-position=-20000,-20000", "--window-size=1280,860");
+
   let lastError: unknown = null;
   for (const channel of channels) {
     try {
@@ -52,7 +61,7 @@ async function launchContext(): Promise<BrowserContext> {
         viewport: { width: 1280, height: 860 },
         locale: "pt-BR",
         timezoneId: "America/Sao_Paulo",
-        args: ["--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"],
+        args,
         ignoreDefaultArgs: ["--enable-automation"],
       });
     } catch (err) {
@@ -98,9 +107,12 @@ export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string
     } else {
       await page.waitForLoadState("networkidle", { timeout: WAIT_SELECTOR_MS }).catch(() => undefined);
     }
-    // Rolagem leve: alguns sites só montam os cards quando a página é rolada.
-    await page.mouse.wheel(0, 1200).catch(() => undefined);
-    await page.waitForTimeout(800);
+    // Rolagem leve: alguns sites só montam os cards (e preços) quando a página é rolada.
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, 1500).catch(() => undefined);
+      await page.waitForTimeout(350);
+    }
+    await page.waitForTimeout(600);
     return { html: await page.content(), finalUrl: page.url() };
   } catch (err) {
     if (err instanceof ScrapeError) throw err;

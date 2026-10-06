@@ -44,10 +44,14 @@ export function OfferRow({ offer, position }: { offer: Offer; position: number }
       </div>
 
       <div className="shrink-0 text-right">
-        <div className="text-base font-semibold text-zinc-900">{formatBRL(offer.price)}</div>
+        <div className="text-base font-semibold text-zinc-900">
+          {formatBRL(offer.price)}
+          {offer.cardPrice && <span className="ml-1 text-[11px] font-normal text-zinc-500">à vista</span>}
+        </div>
         {offer.originalPrice && offer.originalPrice > offer.price && (
           <div className="text-xs text-zinc-400 line-through">{formatBRL(offer.originalPrice)}</div>
         )}
+        {offer.cardPrice && <div className="text-xs text-zinc-600">{formatBRL(offer.cardPrice)} no cartão</div>}
         {inst && inst.count > 1 && (
           <div className={`text-xs ${inst.interestFree ? "text-emerald-700" : "text-zinc-500"}`}>
             {inst.count}x {formatBRL(inst.amount)} {inst.interestFree ? "sem juros" : "com juros"}

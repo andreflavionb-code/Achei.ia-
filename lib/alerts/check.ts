@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { searchAll } from "@/lib/offers/search";
-import type { Offer, OriginFilter, SearchFilters } from "@/lib/offers/types";
+import type { ConditionFilter, Offer, OriginFilter, SearchFilters } from "@/lib/offers/types";
 
 export interface AlertCheckSummary {
   checked: number;
@@ -87,10 +87,12 @@ export async function checkAlerts(): Promise<AlertCheckSummary> {
         origin: alert.origin as OriginFilter,
         maxPrice: alert.maxPrice,
         freeShippingOnly: alert.freeShippingOnly,
-        newOnly: alert.newOnly,
+        condition: alert.condition as ConditionFilter,
         precise: alert.precise,
+        sort: "price",
+        sources: null,
       };
-      const result = await searchAll(alert.query, filters);
+      const result = await searchAll(alert.query, filters, { fresh: true });
       const offers = result.offers;
 
       let shouldNotify = false;

@@ -15,12 +15,9 @@ export async function GET() {
   return NextResponse.json({
     demoMode: demo,
     passwordProtected: Boolean(process.env.APP_PASSWORD?.trim()),
-    sources: adapters.map((a) => ({
-      id: a.id,
-      name: a.name,
-      kind: a.id === "demo" ? "demo" : a.id === "mercadolivre" && mlConfigured ? "api" : "web",
-    })),
+    sources: adapters.map((a) => ({ id: a.id, name: a.name, kind: a.transport })),
     mercadolivre: { configured: mlConfigured, authorized: mlAuthorized, affiliate: isAffiliateConfigured() },
     email: isEmailConfigured(),
+    alertsIntervalMin: Number(process.env.ALERTS_INTERVAL_MIN ?? 60),
   });
 }

@@ -171,16 +171,16 @@ test("filtros e ordenação combinados sobre várias origens", () => {
   const sorted = sortByPriceAsc(all);
   for (let i = 1; i < sorted.length; i++) assert.ok(sorted[i - 1].price <= sorted[i].price);
 
-  const semJuros = applyFilters(all, { interestFreeOnly: true, origin: "all", maxPrice: null, freeShippingOnly: false, newOnly: false, precise: false });
+  const semJuros = applyFilters(all, { interestFreeOnly: true, origin: "all", maxPrice: null, freeShippingOnly: false, condition: "all", precise: false, sort: "price", sources: null });
   assert.ok(semJuros.every((o) => o.installments?.interestFree));
   assert.equal(semJuros.length, 3);
 
-  const nacionalNovo = applyFilters(all, { interestFreeOnly: false, origin: "national", maxPrice: 4400, freeShippingOnly: false, newOnly: true, precise: false });
+  const nacionalNovo = applyFilters(all, { interestFreeOnly: false, origin: "national", maxPrice: 4400, freeShippingOnly: false, condition: "new", precise: false, sort: "price", sources: null });
   // Origem desconhecida (null) não é excluída pelo filtro "nacional"; só o que é sabidamente internacional.
   assert.ok(nacionalNovo.every((o) => o.isInternational !== true && o.condition !== "used" && o.price <= 4400));
   assert.ok(!nacionalNovo.some((o) => o.externalId === "MLB3456789012"));
 
-  const internacional = applyFilters(all, { interestFreeOnly: false, origin: "international", maxPrice: null, freeShippingOnly: false, newOnly: false, precise: false });
+  const internacional = applyFilters(all, { interestFreeOnly: false, origin: "international", maxPrice: null, freeShippingOnly: false, condition: "all", precise: false, sort: "price", sources: null });
   assert.deepEqual(internacional.map((o) => o.externalId), ["MLB3456789012"]);
 });
 
@@ -188,7 +188,7 @@ import { applyRelevance, specificTokens } from "../lib/offers/relevance";
 
 function offer(title: string, price: number) {
   return {
-    id: `t:${title}`, source: "demo" as const, sourceName: "x", externalId: title, title, price, originalPrice: null,
+    id: `t:${title}`, source: "demo" as const, sourceName: "x", externalId: title, title, price, cardPrice: null, originalPrice: null,
     currency: "BRL", installments: null, isInternational: null, freeShipping: null, condition: "new" as const,
     sellerName: null, imageUrl: null, url: "", fetchedAt: NOW,
   };
