@@ -30,6 +30,10 @@ usuário -> /api/search -> adaptadores (Mercado Livre, ...) -> modelo único de 
 
 Requisitos: Node 20+.
 
+**No macOS, o jeito mais simples**: dê duplo clique em `iniciar.command` dentro da pasta do projeto. Ele atualiza o código, instala o que faltar, cria o banco, sobe o servidor e abre o navegador. Na primeira vez o macOS pode pedir para liberar o arquivo: clique com o botão direito, "Abrir".
+
+**Pelo terminal** (sempre dentro da pasta do projeto, por exemplo `cd ~/Achei.ia-`):
+
 ```bash
 npm run setup            # instala tudo, baixa o Chromium, cria o banco e verifica
 npm run dev              # http://localhost:3000
