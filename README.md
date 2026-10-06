@@ -1,11 +1,11 @@
 # Achei
 
-Agregador de ofertas que busca em **9 lojas ao mesmo tempo** (Mercado Livre, Amazon, Magazine Luiza, Casas Bahia, Americanas, Carrefour, KaBuM!, AliExpress e Buscapé), ordena **de verdade** do menor para o maior preço (sem o corte de resultados que os sites aplicam), filtra por parcelamento sem juros, novo/usado, origem nacional/internacional e frete, e avisa por e-mail quando um produto aparece dentro do preço que você quer pagar.
+Agregador de ofertas que busca em **10 lojas ao mesmo tempo** (Mercado Livre, Amazon, Magazine Luiza, Casas Bahia, Americanas, Carrefour, KaBuM!, AliExpress, Buscapé e Google Shopping; Shopee pela API de afiliados), ordena **de verdade** do menor para o maior preço (sem o corte de resultados que os sites aplicam), filtra por parcelamento sem juros, novo/usado, origem nacional/internacional e frete, e avisa por e-mail quando um produto aparece dentro do preço que você quer pagar.
 
 ## Como funciona
 
 ```
-usuário -> /api/search -> 9 coletores em paralelo -> modelo único de oferta
+usuário -> /api/search -> 10+ coletores em paralelo -> modelo único de oferta
                                |
                                v
              normalização + filtros + ordenação no NOSSO servidor -> lista unificada
@@ -31,10 +31,12 @@ usuário -> /api/search -> 9 coletores em paralelo -> modelo único de oferta
 | Mercado Livre | **Chrome escondido** | Bloqueia robôs (verificação de conta). Até 200 anúncios por busca. Depois de muitas buscas seguidas pede verificação por alguns minutos; o sistema espera e tenta de novo. Alternativa estável: API oficial (abaixo). |
 | Magazine Luiza | **Chrome escondido** | Bloqueia robôs (Akamai). |
 | Casas Bahia | **Chrome escondido** | Bloqueia robôs (Akamai); preços carregados por JavaScript. |
+| Google Shopping | **Chrome escondido** | Captcha em requisição simples e headless; abre em janela real. Cards orgânicos (preço, loja, parcelas; link para o próprio Google Shopping) + anúncios com link direto para a loja (inclui Mercado Livre, Magalu, Amazon, Shopee). |
+| Shopee | API de afiliados | O site bloqueia qualquer automação. Preencha `SHOPEE_APP_ID` e `SHOPEE_APP_SECRET` (affiliate.shopee.com.br > Open API); os links já saem com seu rastreio de afiliado. |
 
 **Chrome escondido**: esses três sites detectam qualquer navegador automatizado em modo invisível (headless), mas aceitam uma janela real. O sistema abre o Google Chrome instalado no seu Mac com um perfil próprio (`.browser-profile/`) e **posiciona a janela fora da tela**: ela existe, mas você não a vê. Se algum site pedir uma verificação manual, rode uma vez com `BROWSER_VISIBLE=1` no `.env`, resolva na janela e volte ao normal; a verificação fica guardada no perfil.
 
-**Shopee e Google Shopping** não entram ainda: a Shopee bloqueia qualquer acesso automatizado (até pelo Chrome) e o Google mostra captcha. O caminho para a Shopee é a API de afiliados (etapa 2, você já é afiliado).
+**Mercado Livre e login**: depois de muitas buscas seguidas o ML passa a exigir login ("verificação de conta"). Solução definitiva: `npm run ml:login` abre a janela do Chrome do Achei no Mercado Livre; entre com sua conta uma vez e feche a janela. O login fica salvo no perfil e as buscas voltam a funcionar escondidas. Alternativa sem navegador: API oficial (abaixo).
 
 ### O que é e o que não é possível (leia antes de planejar)
 
@@ -154,6 +156,7 @@ Próximos candidatos: Shopee (API de afiliados), Pontofrio e Extra (mesmo sistem
 | `npm run alerts:check` | Verifica os alertas uma vez (linha de comando) |
 | `npm run probe -- "termo"` | Busca pela linha de comando e mostra o resultado por site |
 | `npm run browser:install` | Baixa o Chromium do navegador invisível |
+| `npm run ml:login` | Abre a janela do Chrome do Achei no Mercado Livre para você fazer login uma vez |
 | `npm run setup` | Instala tudo, baixa o Chromium, cria o banco e roda o doctor |
 | `npm run doctor` | Verifica a instalação e diz o que falta |
 | `npm test` | Testes dos parsers |

@@ -6,7 +6,7 @@ const boolParam = z
   .transform((v) => v === true || v === "1" || v === "true");
 
 export const SOURCE_IDS: SourceId[] = [
-  "mercadolivre", "magalu", "amazon", "casasbahia", "americanas", "carrefour", "kabum", "aliexpress", "buscape", "demo",
+  "mercadolivre", "magalu", "amazon", "casasbahia", "americanas", "carrefour", "kabum", "aliexpress", "buscape", "googleshopping", "shopee", "demo",
 ];
 
 const sourcesParam = z

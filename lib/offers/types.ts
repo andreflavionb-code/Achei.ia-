@@ -13,6 +13,8 @@ export type SourceId =
   | "kabum"
   | "aliexpress"
   | "buscape"
+  | "googleshopping"
+  | "shopee"
   | "demo";
 
 export interface Installments {

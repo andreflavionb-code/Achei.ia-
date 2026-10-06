@@ -221,3 +221,58 @@ test("parseFilters: newOnly antigo vira condition=new; sources e sort", () => {
   assert.deepEqual(f.sources, ["mercadolivre", "amazon"]);
   assert.equal(parseFilters({}).sources, null);
 });
+
+import { parseGoogleShoppingHtml } from "../lib/offers/adapters/googleshopping";
+import { parseShopeeNodes, signShopee } from "../lib/offers/adapters/shopee";
+
+const GS_HTML = `
+<g-inner-card><div><div>
+  <div><div style="-webkit-line-clamp:1">Apple iPhone 15</div></div>
+  <div><div aria-label="R$&nbsp;3.799,00 agora. 10 parcelas de R$&nbsp;422,11. " role="group"><span>R$&nbsp;3.799,00 agora</span></div></div>
+  <div><span>Magalu e mais</span></div>
+  <div>Devolução em até 7 dia(s)</div>
+</div></div><img src="https://encrypted-tbn0.gstatic.com/x.jpg"></g-inner-card>
+<g-inner-card><div><div>
+  <div><div style="-webkit-line-clamp:1">Apple iPhone 15</div></div>
+  <div><div aria-label="R$&nbsp;3.799,00 agora. 10 parcelas de R$&nbsp;422,11. " role="group"></div></div>
+  <div><span>Magalu e mais</span></div>
+</div></div></g-inner-card>
+<div class="pla-unit-container"><div><div><span>Promoção</span></div></div>
+  <div><a href="https://www.mercadolivre.com.br/apple-iphone-15-128-gb-azul/p/MLB2000087240?from=gshop"><div><img src="data:image/png;base64,xx"></div></a></div>
+  <div><span>Apple iPhone 15 (128 GB) - Azul - Excelente (Recondicionado)</span></div>
+  <div><span>R$&nbsp;2.835,00</span><span>&nbsp;3.035</span></div>
+  <div><span>Mercado Livre</span> (9k+)</div>
+</div>`;
+
+test("Google Shopping: cards orgânicos (sem link direto) e anúncios (link da loja), sem duplicar", () => {
+  const offers = parseGoogleShoppingHtml(GS_HTML, NOW);
+  assert.equal(offers.length, 2);
+  const [org, pla] = offers;
+  assert.equal(org.title, "Apple iPhone 15");
+  assert.equal(org.price, 3799);
+  assert.equal(org.sellerName, "Magalu");
+  assert.deepEqual(org.installments, { count: 10, amount: 422.11, rate: null, interestFree: false });
+  assert.ok(org.url.includes("udm=28"));
+  assert.equal(org.imageUrl, "https://encrypted-tbn0.gstatic.com/x.jpg");
+  assert.equal(pla.title, "Apple iPhone 15 (128 GB) - Azul - Excelente (Recondicionado)");
+  assert.equal(pla.price, 2835);
+  assert.equal(pla.originalPrice, 3035);
+  assert.equal(pla.sellerName, "Mercado Livre");
+  assert.ok(pla.url.startsWith("https://www.mercadolivre.com.br/"));
+});
+
+test("Shopee (API de afiliados): nós viram ofertas com offerLink; assinatura SHA256", () => {
+  const offers = parseShopeeNodes(
+    [
+      { itemId: 123, productName: "iPhone 15 128GB", priceMin: 3899.9, priceMax: 4100, imageUrl: "https://cf.shopee.com.br/a.jpg", shopName: "Loja X", productLink: "https://shopee.com.br/p/123", offerLink: "https://s.shopee.com.br/abc" },
+      { itemId: 124, productName: "Sem preço", priceMin: 0 },
+    ],
+    NOW,
+  );
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0].price, 3899.9);
+  assert.equal(offers[0].url, "https://s.shopee.com.br/abc");
+  assert.equal(offers[0].sellerName, "Loja X");
+  assert.equal(signShopee("1", "s", "{}", 10), signShopee("1", "s", "{}", 10));
+  assert.notEqual(signShopee("1", "s", "{}", 10), signShopee("1", "s", "{}", 11));
+});

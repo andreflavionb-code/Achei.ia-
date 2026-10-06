@@ -9,6 +9,8 @@ import { carrefourAdapter } from "./carrefour";
 import { kabumAdapter } from "./kabum";
 import { aliExpressAdapter } from "./aliexpress";
 import { buscapeAdapter } from "./buscape";
+import { googleShoppingAdapter } from "./googleshopping";
+import { shopeeAdapter } from "./shopee";
 import { demoAdapter } from "./demo";
 
 /**
@@ -17,7 +19,8 @@ import { demoAdapter } from "./demo";
  * - Leitura direta (requisição simples, sem navegador): Amazon, Americanas,
  *   Carrefour, KaBuM!, AliExpress, Buscapé.
  * - Navegador escondido (sites que bloqueiam robôs): Mercado Livre,
- *   Magazine Luiza, Casas Bahia.
+ *   Magazine Luiza, Casas Bahia, Google Shopping.
+ * - Só com credenciais: Shopee (API de afiliados, SHOPEE_APP_ID/SECRET).
  * - API oficial do Mercado Livre: usada no lugar do coletor de página
  *   quando ML_CLIENT_ID/ML_CLIENT_SECRET estão definidos.
  * - DEMO_MODE=1 acrescenta dados de exemplo.
@@ -35,7 +38,11 @@ const WEB_ADAPTERS: MarketplaceAdapter[] = [
   kabumAdapter,
   aliExpressAdapter,
   buscapeAdapter,
+  googleShoppingAdapter,
 ];
+
+/** Fontes que só funcionam com credenciais (ficam inativas sem elas). */
+const API_ADAPTERS: MarketplaceAdapter[] = [shopeeAdapter];
 
 function enabledSourceIds(): Set<SourceId> | null {
   const raw = process.env.SOURCES?.trim();
@@ -53,6 +60,7 @@ export function getActiveAdapters(): { adapters: MarketplaceAdapter[]; demo: boo
     if (useMlApi && adapter.id === "mercadolivre") continue;
     adapters.push(adapter);
   }
+  for (const adapter of API_ADAPTERS) if (adapter.isConfigured()) adapters.push(adapter);
 
   const filtered = enabled ? adapters.filter((a) => enabled.has(a.id)) : adapters;
   const demo = process.env.DEMO_MODE === "1" || filtered.length === 0;
@@ -62,5 +70,5 @@ export function getActiveAdapters(): { adapters: MarketplaceAdapter[]; demo: boo
 }
 
 export function getAllAdapters(): MarketplaceAdapter[] {
-  return [mercadoLivreAdapter, ...WEB_ADAPTERS, demoAdapter];
+  return [mercadoLivreAdapter, ...WEB_ADAPTERS, ...API_ADAPTERS, demoAdapter];
 }
