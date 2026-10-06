@@ -4,41 +4,59 @@ import { fetchHtmlWithBrowser, scrapeMode } from "./browser";
 export interface PageSource {
   /** Seletor que indica que a listagem carregou (usado pelo navegador). */
   waitFor: string;
-  /** Diz se a resposta simples foi um bloqueio (captcha, verificação, 403...). */
+  /** Diz se a resposta foi um bloqueio (captcha, verificação, 403...). */
   isBlocked: (html: string, finalUrl: string, status: number) => boolean;
+  /** Diz se a página é uma busca legítima sem resultados. */
+  isEmpty?: (html: string) => boolean;
   /** Nome amigável para mensagens. */
   name: string;
 }
 
-export interface LoadedPage {
+export interface LoadedPage<T> {
   html: string;
   finalUrl: string;
   via: "plain" | "browser";
+  items: T[];
 }
 
 /**
- * Carrega a página de busca de um site respeitando SCRAPE_MODE:
- * requisição simples primeiro e, se o site bloquear, navegador invisível.
+ * Carrega a página de busca e extrai os itens, respeitando SCRAPE_MODE:
+ *  1. requisição simples; se não for bloqueada e render itens, pronto;
+ *  2. senão, navegador real; se ainda vier bloqueado ou vazio, erro claro.
  */
-export async function loadSearchPage(url: string, source: PageSource): Promise<LoadedPage> {
+export async function loadAndParse<T>(
+  url: string,
+  source: PageSource,
+  parse: (html: string) => T[],
+): Promise<LoadedPage<T>> {
   const mode = scrapeMode();
+  let plainHtml = "";
 
   if (mode !== "browser") {
     const page = await fetchHtmlFull(url);
+    plainHtml = page.html;
     const blocked = page.status >= 400 || source.isBlocked(page.html, page.finalUrl, page.status);
-    if (!blocked) return { html: page.html, finalUrl: page.finalUrl, via: "plain" };
+    if (!blocked) {
+      const items = parse(page.html);
+      if (items.length > 0 || source.isEmpty?.(page.html)) {
+        return { html: page.html, finalUrl: page.finalUrl, via: "plain", items };
+      }
+    }
     if (mode === "plain") {
       throw new ScrapeError(
-        page.status >= 400
-          ? `${source.name} respondeu HTTP ${page.status} (bloqueio anti-robô). Ative o navegador: SCRAPE_MODE=auto`
-          : `${source.name} pediu verificação anti-robô. Ative o navegador: SCRAPE_MODE=auto`,
+        blocked
+          ? `${source.name} bloqueou a requisição simples (HTTP ${page.status}). Ative o navegador: SCRAPE_MODE=auto`
+          : `${source.name}: nenhum produto reconhecido na página (layout pode ter mudado).`,
       );
     }
   }
 
   const page = await fetchHtmlWithBrowser(url, source.waitFor);
   if (source.isBlocked(page.html, page.finalUrl, 200)) {
-    throw new ScrapeError(`${source.name} bloqueou até o navegador (verificação anti-robô). Tente de novo mais tarde.`);
+    throw new ScrapeError(
+      `${source.name} bloqueou até o navegador (verificação anti-robô). Abra ${new URL(url).hostname} no Chrome, resolva a verificação se aparecer, e tente de novo.`,
+    );
   }
-  return { html: page.html, finalUrl: page.finalUrl, via: "browser" };
+  const items = parse(page.html);
+  return { html: page.html || plainHtml, finalUrl: page.finalUrl, via: "browser", items };
 }

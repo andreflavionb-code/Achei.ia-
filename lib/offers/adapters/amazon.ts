@@ -1,6 +1,6 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { dumpDebug, parseBRL, parseInstallments, ScrapeError } from "../html";
-import { loadSearchPage, type PageSource } from "../fetchPage";
+import { loadAndParse, type PageSource } from "../fetchPage";
 import type { AdapterSearchOptions, MarketplaceAdapter, Offer } from "../types";
 
 /**
@@ -73,8 +73,13 @@ export function parseAmazonHtml(html: string, fetchedAt: string): Offer[] {
 const AMAZON_SOURCE: PageSource = {
   name: "Amazon",
   waitFor: 'div[data-component-type="s-search-result"]',
+  // Só considera bloqueio quando é a página de captcha/erro de verdade
+  // (páginas normais também contêm a palavra "captcha" em scripts).
   isBlocked: (html, _url, status) =>
-    status === 503 || /captcha|Digite os caracteres|api-services-support@amazon\.com|Algo deu errado/i.test(html),
+    status === 503 ||
+    /validateCaptcha|api-services-support@amazon\.com/i.test(html) ||
+    (/Algo deu errado/i.test(html) && !/s-search-result/.test(html)),
+  isEmpty: (html) => /Nenhum resultado para|não encontrou|não encontramos/i.test(html),
 };
 
 export const amazonAdapter: MarketplaceAdapter = {
@@ -89,19 +94,23 @@ export const amazonAdapter: MarketplaceAdapter = {
     const fetchedAt = new Date().toISOString();
     const pages = Math.max(1, Math.min(4, Math.ceil(options.maxResults / ITEMS_PER_PAGE)));
 
-    const first = await loadSearchPage(buildUrl(query, 1), AMAZON_SOURCE);
-    const offers = parseAmazonHtml(first.html, fetchedAt);
+    const parse = (html: string) => parseAmazonHtml(html, fetchedAt);
+    const first = await loadAndParse(buildUrl(query, 1), AMAZON_SOURCE, parse);
+    const offers = first.items;
     if (offers.length === 0) {
-      if (/Nenhum resultado|não encontrou|não encontramos/i.test(first.html)) return [];
+      if (AMAZON_SOURCE.isEmpty?.(first.html)) return [];
       const file = await dumpDebug("amazon", first.html);
       throw new ScrapeError(`Nenhum produto reconhecido na página da Amazon${file ? `. HTML salvo em ${file}` : ""}`);
     }
 
-    const rest = await Promise.allSettled(
-      Array.from({ length: pages - 1 }, (_, i) => loadSearchPage(buildUrl(query, i + 2), AMAZON_SOURCE)),
-    );
-    for (const page of rest) {
-      if (page.status === "fulfilled") offers.push(...parseAmazonHtml(page.value.html, fetchedAt));
+    for (let i = 2; i <= pages; i++) {
+      try {
+        const next = await loadAndParse(buildUrl(query, i), AMAZON_SOURCE, parse);
+        if (next.items.length === 0) break;
+        offers.push(...next.items);
+      } catch {
+        break;
+      }
     }
 
     const seen = new Set<string>();

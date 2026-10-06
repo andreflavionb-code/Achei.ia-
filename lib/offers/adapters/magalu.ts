@@ -1,6 +1,6 @@
 import { parse } from "node-html-parser";
 import { dumpDebug, extractJsonScript, findProductArrays, parseBRL, parseInstallments, ScrapeError } from "../html";
-import { loadSearchPage, type PageSource } from "../fetchPage";
+import { loadAndParse, type PageSource } from "../fetchPage";
 import type { AdapterSearchOptions, MarketplaceAdapter, Offer } from "../types";
 
 /**
@@ -136,6 +136,7 @@ const MAGALU_SOURCE: PageSource = {
   name: "Magazine Luiza",
   waitFor: '[data-testid="product-card-container"], script#__NEXT_DATA__',
   isBlocked: (html, _url, status) => status === 403 || /akamai-bot|Não é possível acessar a página/i.test(html),
+  isEmpty: (html) => /não encontramos|nenhum resultado|não encontrou/i.test(html),
 };
 
 export const magaluAdapter: MarketplaceAdapter = {
@@ -150,21 +151,25 @@ export const magaluAdapter: MarketplaceAdapter = {
     const fetchedAt = new Date().toISOString();
     const pages = Math.max(1, Math.min(5, Math.ceil(options.maxResults / ITEMS_PER_PAGE)));
 
-    const first = await loadSearchPage(buildUrl(query, 1), MAGALU_SOURCE);
-    const offers = parseMagaluHtml(first.html, fetchedAt);
+    const parse = (html: string) => parseMagaluHtml(html, fetchedAt);
+    const first = await loadAndParse(buildUrl(query, 1), MAGALU_SOURCE, parse);
+    const offers = first.items;
     if (offers.length === 0) {
-      if (/não encontramos|nenhum resultado|não encontrou/i.test(first.html)) return [];
+      if (MAGALU_SOURCE.isEmpty?.(first.html)) return [];
       const file = await dumpDebug("magalu", first.html);
       throw new ScrapeError(
         `Nenhum produto reconhecido na página da Magazine Luiza${file ? `. HTML salvo em ${file}` : ""}`,
       );
     }
 
-    const rest = await Promise.allSettled(
-      Array.from({ length: pages - 1 }, (_, i) => loadSearchPage(buildUrl(query, i + 2), MAGALU_SOURCE)),
-    );
-    for (const page of rest) {
-      if (page.status === "fulfilled") offers.push(...parseMagaluHtml(page.value.html, fetchedAt));
+    for (let i = 2; i <= pages; i++) {
+      try {
+        const next = await loadAndParse(buildUrl(query, i), MAGALU_SOURCE, parse);
+        if (next.items.length === 0) break;
+        offers.push(...next.items);
+      } catch {
+        break;
+      }
     }
 
     const seen = new Set<string>();

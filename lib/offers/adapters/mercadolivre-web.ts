@@ -1,7 +1,7 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { toAffiliateUrl } from "@/lib/mercadolivre/affiliate";
 import { dumpDebug, parseBRL, parseInstallments, ScrapeError } from "../html";
-import { loadSearchPage, type PageSource } from "../fetchPage";
+import { loadAndParse, type PageSource } from "../fetchPage";
 import type { AdapterSearchOptions, MarketplaceAdapter, Offer } from "../types";
 
 /**
@@ -129,8 +129,9 @@ const ML_SOURCE: PageSource = {
   name: "Mercado Livre",
   waitFor: "li.ui-search-layout__item, .poly-card, .ui-search-result__wrapper",
   isBlocked: (html, finalUrl) =>
-    /account-verification|\/gz\/|captcha/i.test(finalUrl) ||
-    /account-verification|verifique que você não é um robô|Verificação de segurança/i.test(html),
+    /account-verification|\/gz\//i.test(finalUrl) ||
+    /suspicious-traffic-frontend|gz-account-verification/i.test(html),
+  isEmpty: (html) => /não encontramos|nenhum resultado|Não há anúncios/i.test(html),
 };
 
 export const mercadoLivreWebAdapter: MarketplaceAdapter = {
@@ -145,22 +146,27 @@ export const mercadoLivreWebAdapter: MarketplaceAdapter = {
     const fetchedAt = new Date().toISOString();
     const pages = Math.max(1, Math.ceil(options.maxResults / ITEMS_PER_PAGE));
 
-    const first = await loadSearchPage(buildUrl(query, 0), ML_SOURCE);
-    const offers = parseMercadoLivreHtml(first.html, fetchedAt);
+    const parse = (html: string) => parseMercadoLivreHtml(html, fetchedAt);
+    const first = await loadAndParse(buildUrl(query, 0), ML_SOURCE, parse);
+    const offers = first.items;
 
     if (offers.length === 0) {
-      if (/não encontramos|nenhum resultado|Não há anúncios/i.test(first.html)) return [];
+      if (ML_SOURCE.isEmpty?.(first.html)) return [];
       const file = await dumpDebug("mercadolivre", first.html);
       throw new ScrapeError(
         `Nenhum produto reconhecido na página do Mercado Livre (layout pode ter mudado)${file ? `. HTML salvo em ${file}` : ""}`,
       );
     }
 
-    const rest = await Promise.allSettled(
-      Array.from({ length: pages - 1 }, (_, i) => loadSearchPage(buildUrl(query, (i + 1) * ITEMS_PER_PAGE), ML_SOURCE)),
-    );
-    for (const page of rest) {
-      if (page.status === "fulfilled") offers.push(...parseMercadoLivreHtml(page.value.html, fetchedAt));
+    // Páginas seguintes em sequência (o navegador é compartilhado).
+    for (let i = 1; i < pages; i++) {
+      try {
+        const next = await loadAndParse(buildUrl(query, i * ITEMS_PER_PAGE), ML_SOURCE, parse);
+        if (next.items.length === 0) break;
+        offers.push(...next.items);
+      } catch {
+        break;
+      }
     }
 
     const seen = new Set<string>();

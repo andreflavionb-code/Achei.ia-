@@ -46,3 +46,6 @@ next-env.d.ts
 
 # HTML salvo pelos coletores para depuração
 /.debug/
+
+# perfil do navegador usado pelos coletores
+/.browser-profile/
