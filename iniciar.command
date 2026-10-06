@@ -49,6 +49,16 @@ echo "Verificando banco de dados..."
 npm run db:push --silent
 echo ""
 
+# Encerra servidores antigos do PRÓPRIO Achei (next dev rodando nesta pasta).
+# Outros programas na porta 3000 não são tocados.
+for pid in $(pgrep -f "next dev" 2>/dev/null); do
+    if lsof -p "$pid" 2>/dev/null | grep -q "$(pwd)"; then
+        echo "Encerrando servidor anterior do Achei (processo $pid)..."
+        kill "$pid" 2>/dev/null
+    fi
+done
+sleep 1
+
 # Escolhe uma porta livre (não derruba outros programas que estejam na 3000)
 PORT=3000
 for candidate in 3000 3010 3020 3030; do

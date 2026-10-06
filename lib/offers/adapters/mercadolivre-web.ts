@@ -63,7 +63,7 @@ function parseCard(card: HTMLElement, fetchedAt: string): Offer | null {
   const originalPrice = parseBRL(text(previousEl));
 
   const installmentsEl = first(card, [".poly-price__installments", ".ui-search-installments", "[class*=installments]"]);
-  const installments = parseInstallments(text(installmentsEl));
+  const installments = parseInstallments(text(installmentsEl), price);
 
   const cardText = text(card);
   const freeShipping = /frete gr[áa]tis/i.test(cardText) ? true : null;

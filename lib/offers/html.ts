@@ -99,17 +99,26 @@ export function parseBRL(text: string | null | undefined): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-/** "em 12x R$ 103,25 sem juros" -> { count: 12, amount: 103.25, interestFree: true } */
-export function parseInstallments(text: string | null | undefined) {
+/**
+ * "em 12x R$ 103,25 sem juros" -> { count: 12, amount: 103.25, interestFree: true }
+ * "em até 10x sem juros" (sem valor) -> usa o preço para calcular a parcela, se informado.
+ */
+export function parseInstallments(text: string | null | undefined, price?: number | null) {
   if (!text) return null;
   const normalized = text.replace(/\s+/g, " ");
-  const match = normalized.match(/(\d{1,2})\s*x\s*(?:de\s*)?R?\$?\s*([\d.]+(?:,\d{1,2})?)/i);
-  if (!match) return null;
-  const count = Number(match[1]);
-  const amount = parseBRL(match[2]);
-  if (!count || amount === null) return null;
   const interestFree = /sem juros/i.test(normalized);
-  return { count, amount, rate: interestFree ? 0 : null, interestFree };
+  const withAmount = normalized.match(/(\d{1,2})\s*x\s*(?:de\s*)?R?\$?\s*([\d.]+(?:,\d{1,2})?)/i);
+  if (withAmount) {
+    const count = Number(withAmount[1]);
+    const amount = parseBRL(withAmount[2]);
+    if (count && amount !== null) return { count, amount, rate: interestFree ? 0 : null, interestFree };
+  }
+  const countOnly = normalized.match(/(?:em\s*(?:at[ée]\s*)?)?(\d{1,2})\s*x\b/i);
+  if (countOnly && price) {
+    const count = Number(countOnly[1]);
+    if (count > 1) return { count, amount: Math.round((price / count) * 100) / 100, rate: interestFree ? 0 : null, interestFree };
+  }
+  return null;
 }
 
 /**

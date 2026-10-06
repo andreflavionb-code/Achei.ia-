@@ -231,3 +231,11 @@ test("modo preciso: preço muito abaixo da mediana é escondido", () => {
   assert.equal(kept.length, 5);
   assert.equal(hidden[0].price, 150);
 });
+
+test("parseInstallments: 'em até 10x sem juros' sem valor usa o preço", () => {
+  const r = parseInstallments("em até 10x sem juros", 2499);
+  assert.equal(r?.count, 10);
+  assert.equal(r?.amount, 249.9);
+  assert.equal(r?.interestFree, true);
+  assert.equal(parseInstallments("em até 10x sem juros"), null);
+});

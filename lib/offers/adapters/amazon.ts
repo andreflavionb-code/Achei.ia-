@@ -33,7 +33,10 @@ function parseCard(card: HTMLElement, fetchedAt: string): Offer | null {
   const original = parseBRL(text(card.querySelector(".a-price.a-text-price .a-offscreen")));
   const cardText = text(card);
 
-  const installments = parseInstallments(cardText.match(/(?:em\s*at[ée]\s*)?\d{1,2}x\s*(?:de\s*)?R\$\s*[\d.,]+(?:\s*sem juros)?/i)?.[0]);
+  const instText =
+    cardText.match(/(?:em\s*at[ée]\s*)?\d{1,2}x\s*(?:de\s*)?R\$\s*[\d.,]+(?:\s*sem juros)?/i)?.[0] ??
+    cardText.match(/(?:em\s*at[ée]\s*)?\d{1,2}x(?:\s*sem juros)?/i)?.[0];
+  const installments = parseInstallments(instText, price);
   const freeShipping = /frete gr[áa]tis/i.test(cardText) ? true : null;
   const used = /\busado\b/i.test(cardText) && !/\busado\b/i.test(title) ? "unknown" : "new";
 
