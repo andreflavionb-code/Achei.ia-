@@ -36,7 +36,7 @@ usuário -> /api/search -> 10+ coletores em paralelo -> modelo único de oferta
 
 **Chrome escondido**: esses três sites detectam qualquer navegador automatizado em modo invisível (headless), mas aceitam uma janela real. O sistema abre o Google Chrome instalado no seu Mac com um perfil próprio (`.browser-profile/`) e **posiciona a janela fora da tela**: ela existe, mas você não a vê. Se algum site pedir uma verificação manual, rode uma vez com `BROWSER_VISIBLE=1` no `.env`, resolva na janela e volte ao normal; a verificação fica guardada no perfil.
 
-**Mercado Livre e login**: depois de muitas buscas seguidas o ML passa a exigir login ("verificação de conta"). Solução definitiva: `npm run ml:login` abre a janela do Chrome do Achei no Mercado Livre; entre com sua conta uma vez e feche a janela. O login fica salvo no perfil e as buscas voltam a funcionar escondidas. Alternativa sem navegador: API oficial (abaixo).
+**Mercado Livre e login**: depois de muitas buscas seguidas o ML passa a exigir login ("verificação de conta"). Solução definitiva: `npm run login` abre a janela do Chrome do Achei no Mercado Livre; entre com sua conta uma vez e feche a janela. O login fica salvo no perfil e as buscas voltam a funcionar escondidas. Alternativa sem navegador: API oficial (abaixo).
 
 ### O que é e o que não é possível (leia antes de planejar)
 
@@ -156,7 +156,7 @@ Próximos candidatos: Shopee (API de afiliados), Pontofrio e Extra (mesmo sistem
 | `npm run alerts:check` | Verifica os alertas uma vez (linha de comando) |
 | `npm run probe -- "termo"` | Busca pela linha de comando e mostra o resultado por site |
 | `npm run browser:install` | Baixa o Chromium do navegador invisível |
-| `npm run ml:login` | Abre a janela do Chrome do Achei no Mercado Livre para você fazer login uma vez |
+| `npm run login` | Abre a janela do Chrome do Achei no Mercado Livre para você fazer login uma vez |
 | `npm run setup` | Instala tudo, baixa o Chromium, cria o banco e roda o doctor |
 | `npm run doctor` | Verifica a instalação e diz o que falta |
 | `npm test` | Testes dos parsers |

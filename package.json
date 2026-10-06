@@ -17,7 +17,7 @@
     "browser:install": "playwright install chromium",
     "doctor": "tsx scripts/doctor.ts",
     "setup": "npm install --include=dev && npm run browser:install && npm run db:push && npm run doctor",
-    "ml:login": "tsx scripts/ml-login.ts"
+    "login": "tsx scripts/login.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

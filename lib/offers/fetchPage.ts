@@ -1,5 +1,5 @@
 import { fetchHtmlFull, ScrapeError } from "./html";
-import { fetchHtmlWithBrowser, scrapeMode } from "./browser";
+import { clearCookiesFor, fetchHtmlWithBrowser, scrapeMode } from "./browser";
 
 export interface PageSource {
   /** Seletor que indica que a listagem carregou (usado pelo navegador). */
@@ -51,12 +51,20 @@ export async function loadAndParse<T>(
     }
   }
 
-  const page = await fetchHtmlWithBrowser(url, source.waitFor);
-  if (source.isBlocked(page.html, page.finalUrl, 200)) {
+  let page = await fetchHtmlWithBrowser(url, source.waitFor);
+  let blocked = source.isBlocked(page.html, page.finalUrl, 200);
+  let items = blocked ? [] : parse(page.html);
+  if (blocked || (items.length === 0 && !source.isEmpty?.(page.html))) {
+    // Perfil "marcado" por um bloqueio anterior: limpa os cookies do site e tenta num perfil limpo e descartável.
+    await clearCookiesFor(new URL(url).hostname).catch(() => undefined);
+    page = await fetchHtmlWithBrowser(url, source.waitFor, { fresh: true });
+    blocked = source.isBlocked(page.html, page.finalUrl, 200);
+    items = blocked ? [] : parse(page.html);
+  }
+  if (blocked) {
     throw new ScrapeError(
       `${source.name} bloqueou até o navegador (verificação anti-robô). Abra ${new URL(url).hostname} no Chrome, resolva a verificação se aparecer, e tente de novo.`,
     );
   }
-  const items = parse(page.html);
   return { html: page.html || plainHtml, finalUrl: page.finalUrl, via: "browser", items };
 }

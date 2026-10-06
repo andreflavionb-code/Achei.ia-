@@ -98,9 +98,42 @@ export interface BrowserPage {
   finalUrl: string;
 }
 
-/** Abre a URL num navegador real e devolve o HTML renderizado. */
-export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string): Promise<BrowserPage> {
-  const context = await getContext();
+/**
+ * Contexto descartável: perfil novo numa pasta temporária, para quando o
+ * perfil principal ficou "marcado" por um site (bloqueio que persiste em
+ * cookies/armazenamento). Fecha e apaga ao terminar.
+ */
+async function withFreshContext<T>(fn: (ctx: BrowserContext) => Promise<T>): Promise<T> {
+  const pw = await import("playwright");
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const os = await import("node:os");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "achei-chrome-"));
+  const args = ["--disable-blink-features=AutomationControlled", "--no-first-run", "--no-default-browser-check"];
+  if (!headless() && !visible()) args.push("--window-position=-20000,-20000", "--window-size=1280,860");
+  const ctx = await pw.chromium.launchPersistentContext(dir, {
+    channel: process.env.BROWSER_CHANNEL?.trim() === "chromium" ? "chromium" : "chrome",
+    headless: headless(),
+    viewport: { width: 1280, height: 860 },
+    locale: "pt-BR",
+    timezoneId: "America/Sao_Paulo",
+    args,
+    ignoreDefaultArgs: ["--enable-automation"],
+  });
+  try {
+    return await fn(ctx);
+  } finally {
+    await ctx.close().catch(() => undefined);
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/** Abre a URL num navegador real e devolve o HTML renderizado. `fresh` usa um perfil limpo e descartável. */
+export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string, options: { fresh?: boolean } = {}): Promise<BrowserPage> {
+  if (options.fresh) return withFreshContext((ctx) => fetchInContext(ctx, url, waitForSelector));
+  return fetchInContext(await getContext(), url, waitForSelector);
+}
+
+async function fetchInContext(context: BrowserContext, url: string, waitForSelector?: string): Promise<BrowserPage> {
   const page = await context.newPage();
   try {
     await page.addInitScript(() => {
@@ -113,19 +146,42 @@ export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string
     } else {
       await page.waitForLoadState("networkidle", { timeout: WAIT_SELECTOR_MS }).catch(() => undefined);
     }
-    // Rolagem leve: alguns sites só montam os cards (e preços) quando a página é rolada.
-    for (let i = 0; i < 4; i++) {
-      await page.mouse.wheel(0, 1500).catch(() => undefined);
-      await page.waitForTimeout(350);
+    const scrollAndRead = async () => {
+      // Rolagem leve: alguns sites só montam os cards (e preços) quando a página é rolada.
+      for (let i = 0; i < 4; i++) {
+        await page.mouse.wheel(0, 1500).catch(() => undefined);
+        await page.waitForTimeout(350);
+      }
+      await page.waitForTimeout(600);
+      return page.content();
+    };
+    let html = await scrollAndRead();
+    // Página em branco (desafio anti-robô que ainda não resolveu): espera e recarrega uma vez.
+    if (html.length < 1000) {
+      await page.waitForTimeout(4000);
+      await page.reload({ waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS }).catch(() => undefined);
+      if (waitForSelector) await page.waitForSelector(waitForSelector, { timeout: WAIT_SELECTOR_MS }).catch(() => undefined);
+      html = await scrollAndRead();
     }
-    await page.waitForTimeout(600);
-    return { html: await page.content(), finalUrl: page.url() };
+    return { html, finalUrl: page.url() };
   } catch (err) {
     if (err instanceof ScrapeError) throw err;
     throw new ScrapeError(`Navegador falhou em ${new URL(url).hostname}: ${(err as Error).message.split("\n")[0]}`);
   } finally {
     await page.close().catch(() => undefined);
   }
+}
+
+/**
+ * Apaga os cookies de um domínio no perfil. Depois de um bloqueio, alguns
+ * sites (Casas Bahia/Akamai, Mercado Livre) gravam cookies que mantêm o
+ * perfil "marcado" mesmo quando o bloqueio já passou; limpar e tentar de
+ * novo costuma resolver.
+ */
+export async function clearCookiesFor(hostname: string): Promise<void> {
+  const root = hostname.split(".").slice(-3).join(".").replace(/^www\./, "");
+  const context = await getContext();
+  await context.clearCookies({ domain: new RegExp(`(^|\\.)${root.replace(/\./g, "\\.")}$`) }).catch(() => undefined);
 }
 
 export async function closeBrowser(): Promise<void> {
