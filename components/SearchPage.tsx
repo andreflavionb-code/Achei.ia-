@@ -61,6 +61,22 @@ export function SearchPage() {
   const [showSources, setShowSources] = useState(false);
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [status, setStatus] = useState<Status | null>(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginBusy, setLoginBusy] = useState(false);
+
+  async function loginWindow(action: "open" | "close") {
+    setLoginBusy(true);
+    try {
+      const res = await fetch("/api/browser/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Falha ao abrir o Chrome");
+      setLoginOpen(action === "open");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro inesperado");
+    } finally {
+      setLoginBusy(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/status")
@@ -238,6 +254,21 @@ export function SearchPage() {
           {filters.sources && (
             <button type="button" onClick={() => updateFilters({ sources: null })} className="text-zinc-600 underline">
               todas as lojas
+            </button>
+          )}
+          {loginOpen ? (
+            <button type="button" onClick={() => void loginWindow("close")} disabled={loginBusy} className="rounded border border-emerald-600 px-2 py-0.5 text-emerald-700 disabled:opacity-50">
+              Pronto, esconder o Chrome
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void loginWindow("open")}
+              disabled={loginBusy}
+              title="Mostra o Chrome do Achei com Mercado Livre, Magalu e Casas Bahia para você entrar na sua conta. Depois de muitas buscas, essas lojas exigem login."
+              className="text-zinc-600 underline disabled:opacity-50"
+            >
+              {loginBusy ? "Abrindo…" : "Entrar nas lojas"}
             </button>
           )}
         </div>

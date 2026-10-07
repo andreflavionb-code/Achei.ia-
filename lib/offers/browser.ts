@@ -26,6 +26,7 @@ const run = promisify(execFile);
 import { ScrapeError } from "./html";
 
 const NAV_TIMEOUT_MS = Number(process.env.BROWSER_TIMEOUT_MS ?? 30000);
+const PROFILE_DIR = path.join(process.cwd(), ".browser-profile");
 const WAIT_SELECTOR_MS = Number(process.env.BROWSER_WAIT_MS ?? 15000);
 
 /**
@@ -81,6 +82,51 @@ export async function hideChrome(userDataDir: string): Promise<boolean> {
   }
 }
 
+/** macOS: traz o Chrome do Achei para a frente (para o usuário fazer login numa loja). */
+export async function showChrome(userDataDir: string = PROFILE_DIR): Promise<boolean> {
+  if (process.platform !== "darwin") return false;
+  const pid = await chromePidFor(userDataDir);
+  if (!pid) return false;
+  try {
+    await run("osascript", ["-e", `tell application "System Events" to tell (first process whose unix id is ${pid}) to (set visible to true) & (set frontmost to true)`], { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const loginPages: import("playwright").Page[] = [];
+
+/**
+ * Abre abas de login no MESMO Chrome que faz as buscas (sem parar o
+ * servidor) e mostra a janela. Os logins ficam no perfil. Use
+ * closeLoginPages() para fechar as abas e esconder de novo.
+ */
+export async function openLoginPages(urls: string[]): Promise<number> {
+  const context = await getContext();
+  for (const url of urls) {
+    const page = await context.newPage();
+    loginPages.push(page);
+    page.on("close", () => {
+      const i = loginPages.indexOf(page);
+      if (i >= 0) loginPages.splice(i, 1);
+    });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS }).catch(() => undefined);
+  }
+  await showChrome();
+  return loginPages.length;
+}
+
+export async function closeLoginPages(): Promise<void> {
+  for (const page of [...loginPages]) await page.close().catch(() => undefined);
+  loginPages.length = 0;
+  await hideChrome(PROFILE_DIR);
+}
+
+export function loginPagesOpen(): number {
+  return loginPages.length;
+}
+
 async function launchContext(): Promise<BrowserContext> {
   let pw: typeof import("playwright");
   try {
@@ -89,7 +135,7 @@ async function launchContext(): Promise<BrowserContext> {
     throw new ScrapeError("Playwright não instalado. Rode: npm run setup");
   }
 
-  const userDataDir = path.join(process.cwd(), ".browser-profile");
+  const userDataDir = PROFILE_DIR;
   const wanted = process.env.BROWSER_CHANNEL?.trim() || "auto";
   const channels: (string | undefined)[] =
     wanted === "auto" ? ["chrome", "chromium", undefined] : wanted === "chromium" ? ["chromium", undefined] : [wanted, "chromium", undefined];
@@ -175,8 +221,6 @@ export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string
   if (options.fresh) return withFreshContext((ctx) => fetchInContext(ctx, url, waitForSelector));
   return fetchInContext(await getContext(), url, waitForSelector);
 }
-
-const PROFILE_DIR = path.join(process.cwd(), ".browser-profile");
 
 async function fetchInContext(context: BrowserContext, url: string, waitForSelector?: string): Promise<BrowserPage> {
   const page = await context.newPage();

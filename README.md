@@ -36,7 +36,7 @@ usuário -> /api/search -> 10+ coletores em paralelo -> modelo único de oferta
 
 **Chrome escondido**: esses três sites detectam qualquer navegador automatizado em modo invisível (headless), mas aceitam uma janela real. O sistema abre o Google Chrome instalado no seu Mac com um perfil próprio (`.browser-profile/`) e **posiciona a janela fora da tela**: ela existe, mas você não a vê. Se algum site pedir uma verificação manual, rode uma vez com `BROWSER_VISIBLE=1` no `.env`, resolva na janela e volte ao normal; a verificação fica guardada no perfil.
 
-**Mercado Livre e login**: depois de muitas buscas seguidas o ML passa a exigir login ("verificação de conta"). Solução definitiva: `npm run login` abre a janela do Chrome do Achei no Mercado Livre; entre com sua conta uma vez e feche a janela. O login fica salvo no perfil e as buscas voltam a funcionar escondidas. Alternativa sem navegador: API oficial (abaixo).
+**Mercado Livre e login**: depois de muitas buscas seguidas o ML passa a exigir login ("verificação de conta"). Solução definitiva: clique em **"Entrar nas lojas"** na página do Achei. O Chrome do Achei aparece com Mercado Livre, Magalu e Casas Bahia; entre com sua conta e clique em "Pronto, esconder o Chrome". (Pela linha de comando, com o servidor parado: `npm run login`.) O login fica salvo no perfil e as buscas voltam a funcionar escondidas. Alternativa sem navegador: API oficial (abaixo).
 
 ### O que é e o que não é possível (leia antes de planejar)
 
