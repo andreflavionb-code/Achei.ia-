@@ -63,7 +63,8 @@ function installmentsFrom(label: string, price: number): Offer["installments"] {
   const amount = parseBRL(m[2]);
   if (!count || !amount) return null;
   const total = count * amount;
-  const interestFree = Math.abs(total - price) < 0.02 * price;
+  // O preço do Google costuma ser o à vista; parcela maior que isso não diz se há juros sobre o preço no cartão.
+  const interestFree = Math.abs(total - price) < 0.02 * price ? true : null;
   return { count, amount, rate: interestFree ? 0 : null, interestFree };
 }
 

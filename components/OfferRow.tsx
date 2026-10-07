@@ -54,7 +54,7 @@ export function OfferRow({ offer, position }: { offer: Offer; position: number }
         {offer.cardPrice && <div className="text-xs text-zinc-600">{formatBRL(offer.cardPrice)} no cartão</div>}
         {inst && inst.count > 1 && (
           <div className={`text-xs ${inst.interestFree ? "text-emerald-700" : "text-zinc-500"}`}>
-            {inst.count}x {formatBRL(inst.amount)} {inst.interestFree ? "sem juros" : "com juros"}
+            {inst.count}x {formatBRL(inst.amount)} {inst.interestFree === true ? "sem juros" : inst.interestFree === false ? "com juros" : "(juros não informados)"}
           </div>
         )}
         <a

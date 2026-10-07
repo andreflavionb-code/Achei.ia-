@@ -24,8 +24,8 @@ export interface Installments {
   amount: number;
   /** Juros ao mês em %. 0 significa "sem juros". null = desconhecido. */
   rate: number | null;
-  /** true quando a loja informa explicitamente que é sem juros. */
-  interestFree: boolean;
+  /** true = sem juros; false = com juros; null = a loja não informou (ex.: parcela anunciada sobre preço à vista com desconto). */
+  interestFree: boolean | null;
 }
 
 export interface Offer {
@@ -106,6 +106,17 @@ export interface MarketplaceAdapter {
   search(query: string, options: AdapterSearchOptions): Promise<Offer[]>;
 }
 
+export interface FilterReasons {
+  /** Parcelamento com juros. */
+  interest: number;
+  /** Loja não informou se tem juros. */
+  unknownInstallments: number;
+  origin: number;
+  condition: number;
+  shipping: number;
+  price: number;
+}
+
 export interface SourceStatus {
   id: SourceId;
   name: string;
@@ -120,6 +131,8 @@ export interface SourceStatus {
   ms?: number;
   /** true quando veio do cache (busca recente com o mesmo termo). */
   cached?: boolean;
+  /** Quantas ofertas cada filtro tirou (depois do modo preciso). */
+  filtered?: FilterReasons;
   error?: string;
 }
 

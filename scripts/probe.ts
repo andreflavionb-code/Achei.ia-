@@ -56,7 +56,7 @@ const sorted = result.offers.every((o, i, arr) => i === 0 || val(arr[i - 1]) <= 
     console.log(`Ordenação crescente correta: ${sorted ? "sim" : "NÃO"}\n`);
 
     for (const o of result.offers.slice(0, 15)) {
-      const inst = o.installments ? `${o.installments.count}x ${brl(o.installments.amount)} ${o.installments.interestFree ? "s/ juros" : "c/ juros"}` : "à vista";
+      const inst = o.installments ? `${o.installments.count}x ${brl(o.installments.amount)} ${o.installments.interestFree === true ? "s/ juros" : o.installments.interestFree === false ? "c/ juros" : "juros ?"}` : "à vista";
       const origin = o.isInternational === null ? "origem ?" : o.isInternational ? "internacional" : "nacional";
       const card = o.cardPrice ? ` (cartão ${brl(o.cardPrice)})` : "";
       console.log(`  ${brl(o.price).padStart(14)}${card.padEnd(22)} ${o.sourceName.padEnd(14)} ${inst.padEnd(28)} ${origin.padEnd(13)} ${o.condition.padEnd(7)} ${o.title.slice(0, 60)}`);

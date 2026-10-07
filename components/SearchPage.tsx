@@ -367,7 +367,31 @@ export function SearchPage() {
                         <>
                           <td className="px-2 py-1.5">{s.fetched === 0 ? <span className="text-zinc-400">nada para esta busca</span> : s.fetched}</td>
                           <td className="px-2 py-1.5">{s.hiddenByPrecision || ""}</td>
-                          <td className="px-2 py-1.5">{filteredOut || ""}</td>
+                          <td className="px-2 py-1.5" title="Fora dos filtros">
+                            {filteredOut ? (
+                              <>
+                                {filteredOut}
+                                {s.filtered && (
+                                  <span className="ml-1 text-zinc-400">
+                                    (
+                                    {[
+                                      s.filtered.interest && `${s.filtered.interest} com juros`,
+                                      s.filtered.unknownInstallments && `${s.filtered.unknownInstallments} sem info de parcelas`,
+                                      s.filtered.origin && `${s.filtered.origin} origem`,
+                                      s.filtered.condition && `${s.filtered.condition} condição`,
+                                      s.filtered.shipping && `${s.filtered.shipping} frete`,
+                                      s.filtered.price && `${s.filtered.price} preço`,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(", ")}
+                                    )
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              ""
+                            )}
+                          </td>
                           <td className="px-2 py-1.5 font-semibold">{s.shown}</td>
                         </>
                       )}

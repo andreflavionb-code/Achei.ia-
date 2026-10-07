@@ -251,7 +251,7 @@ test("Google Shopping: cards orgânicos (sem link direto) e anúncios (link da l
   assert.equal(org.title, "Apple iPhone 15");
   assert.equal(org.price, 3799);
   assert.equal(org.sellerName, "Magalu");
-  assert.deepEqual(org.installments, { count: 10, amount: 422.11, rate: null, interestFree: false });
+  assert.deepEqual(org.installments, { count: 10, amount: 422.11, rate: null, interestFree: null });
   assert.ok(org.url.includes("udm=28"));
   assert.equal(org.imageUrl, "https://encrypted-tbn0.gstatic.com/x.jpg");
   assert.equal(pla.title, "Apple iPhone 15 (128 GB) - Azul - Excelente (Recondicionado)");

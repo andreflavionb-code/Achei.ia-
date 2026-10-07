@@ -33,7 +33,7 @@ export function parseBuscapeHtml(html: string, fetchedAt: string): { offers: Off
     const hasInterest = getPath(hit, "hasInterest");
     const installments =
       count && amount && count > 1
-        ? { count, amount, rate: hasInterest === false ? 0 : null, interestFree: hasInterest === false }
+        ? { count, amount, rate: hasInterest === false ? 0 : null, interestFree: hasInterest === false ? true : null }
         : null;
     const cardPrice = total && total > price * 1.005 ? total : null;
     const path = asString(getPath(hit, "url")) ?? `/${asString(getPath(hit, "categorySeoUrl")) ?? "produto"}/${asString(getPath(hit, "seoUrl")) ?? id}`;

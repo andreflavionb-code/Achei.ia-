@@ -1,5 +1,5 @@
 import { getActiveAdapters } from "./adapters";
-import { applyFilters, sortOffers } from "./filters";
+import { filterWithReasons, sortOffers } from "./filters";
 import { applyRelevance } from "./relevance";
 import type { MarketplaceAdapter, Offer, SearchFilters, SearchResult, SourceStatus } from "./types";
 
@@ -15,7 +15,16 @@ function normalize(offers: Offer[]): Offer[] {
   const seen = new Set<string>();
   const out: Offer[] = [];
   for (const raw of offers) {
-    const offer = raw.condition !== "used" && USED_IN_TITLE.test(raw.title) ? { ...raw, condition: "used" as const } : raw;
+    let offer = raw.condition !== "used" && USED_IN_TITLE.test(raw.title) ? { ...raw, condition: "used" as const } : raw;
+    // Parcelas cujo total bate com o preço no cartão (ou à vista, sem desconto) são sem juros,
+    // mesmo quando a loja não escreve "sem juros" (Amazon, Google Shopping).
+    const inst = offer.installments;
+    if (inst && inst.interestFree !== true && inst.count > 1) {
+      const base = offer.cardPrice ?? offer.price;
+      if (Math.abs(inst.count * inst.amount - base) <= 0.01 * base + 0.05) {
+        offer = { ...offer, installments: { ...inst, rate: 0, interestFree: true } };
+      }
+    }
     const key = `${offer.source}|${offer.title.toLowerCase().replace(/\s+/g, " ").trim()}|${offer.price}|${offer.cardPrice ?? ""}|${offer.sellerName ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -86,7 +95,8 @@ export async function searchAll(query: string, filters: SearchFilters, options: 
     if (result.status === "fulfilled") {
       const normalized = normalize(result.value.offers);
       const relevance = filters.precise ? applyRelevance(normalized, query) : { kept: normalized, hidden: [] };
-      const filtered = applyFilters(relevance.kept, filters).filter((o) => (seen.has(o.id) ? false : (seen.add(o.id), true)));
+      const { kept, reasons } = filterWithReasons(relevance.kept, filters);
+      const filtered = kept.filter((o) => (seen.has(o.id) ? false : (seen.add(o.id), true)));
       allOffers.push(...filtered);
       sources.push({
         id: adapter.id,
@@ -97,6 +107,7 @@ export async function searchAll(query: string, filters: SearchFilters, options: 
         hiddenByPrecision: relevance.hidden.length,
         ms,
         cached: result.value.cached,
+        filtered: reasons,
       });
     } else {
       const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
