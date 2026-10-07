@@ -98,6 +98,33 @@ export async function showChrome(userDataDir: string = PROFILE_DIR): Promise<boo
 const loginPages: import("playwright").Page[] = [];
 
 /**
+ * Vigia: enquanto houver página de busca aberta, reaplica a ocultação a
+ * cada 1,5s. Abrir aba, navegar ou abrir um segundo Chrome (perfil
+ * descartável) pode trazer a janela de volta; o vigia garante que ela
+ * some de novo em no máximo 1,5s. Pausado enquanto o usuário faz login.
+ */
+let activePages = 0;
+let watchdog: NodeJS.Timeout | null = null;
+const extraDirs = new Set<string>();
+
+function startWatchdog() {
+  if (watchdog || process.platform !== "darwin" || headless() || visible()) return;
+  watchdog = setInterval(() => {
+    if (loginPages.length > 0) return;
+    void hideChrome(PROFILE_DIR);
+    for (const dir of extraDirs) void hideChrome(dir);
+  }, 1500);
+  watchdog.unref();
+}
+
+function stopWatchdogIfIdle() {
+  if (activePages <= 0 && watchdog) {
+    clearInterval(watchdog);
+    watchdog = null;
+  }
+}
+
+/**
  * Abre abas de login no MESMO Chrome que faz as buscas (sem parar o
  * servidor) e mostra a janela. Os logins ficam no perfil. Use
  * closeLoginPages() para fechar as abas e esconder de novo.
@@ -207,10 +234,12 @@ async function withFreshContext<T>(fn: (ctx: BrowserContext) => Promise<T>): Pro
     args,
     ignoreDefaultArgs: ["--enable-automation"],
   });
+  extraDirs.add(dir);
   await hideChrome(dir);
   try {
     return await fn(ctx);
   } finally {
+    extraDirs.delete(dir);
     await ctx.close().catch(() => undefined);
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
@@ -223,14 +252,17 @@ export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string
 }
 
 async function fetchInContext(context: BrowserContext, url: string, waitForSelector?: string): Promise<BrowserPage> {
+  activePages++;
+  startWatchdog();
   const page = await context.newPage();
   // Abrir uma aba pode trazer o app de volta à frente; esconde de novo (barato, ~100ms).
-  void hideChrome(PROFILE_DIR);
+  await hideChrome(PROFILE_DIR);
   try {
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     });
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS });
+    void hideChrome(PROFILE_DIR);
     if (waitForSelector) {
       // Dá tempo para verificações em JavaScript redirecionarem para a listagem.
       await page.waitForSelector(waitForSelector, { timeout: WAIT_SELECTOR_MS }).catch(() => undefined);
@@ -260,6 +292,8 @@ async function fetchInContext(context: BrowserContext, url: string, waitForSelec
     throw new ScrapeError(`Navegador falhou em ${new URL(url).hostname}: ${(err as Error).message.split("\n")[0]}`);
   } finally {
     await page.close().catch(() => undefined);
+    activePages--;
+    stopWatchdogIfIdle();
   }
 }
 
