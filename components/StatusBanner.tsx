@@ -5,6 +5,7 @@ export interface Status {
   passwordProtected: boolean;
   sources: { id: import("@/lib/offers/types").SourceId; name: string; kind: "api" | "plain" | "browser" | "demo" }[];
   mercadolivre: { configured: boolean; authorized: boolean; affiliate: boolean };
+  inactive: { id: string; name: string; reason: string }[];
   email: boolean;
   alertsIntervalMin: number;
 }
@@ -26,6 +27,12 @@ export function StatusBanner({ status }: { status: Status | null }) {
         {direct.length > 0 && browser.length > 0 && "; "}
         {browser.length > 0 && <>{browser.join(", ")} (Chrome escondido, 15 a 40s)</>}
         {status.demoMode && <>; dados de exemplo</>}
+        {status.inactive?.length > 0 && (
+          <>
+            {" "}
+            · <span className="text-amber-700">desligadas: {status.inactive.map((s) => `${s.name} (${s.reason})`).join("; ")}</span>
+          </>
+        )}
       </p>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-zinc-500">
         {!status.email && <li>E-mail não configurado (SMTP): alertas ficam só no terminal. Veja o README para ligar o Gmail.</li>}

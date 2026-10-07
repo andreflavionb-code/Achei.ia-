@@ -18,7 +18,7 @@ const GENERIC_WORDS = new Set([
   "camera", "cameras", "celular", "celulares", "smartphone", "telefone", "notebook", "laptop", "computador",
   "pc", "tv", "televisao", "televisor", "monitor", "tablet", "relogio", "smartwatch", "fone", "fones",
   "headphone", "headset", "caixa", "som", "impressora", "geladeira", "fogao", "microondas", "lavadora",
-  "console", "videogame", "placa", "video", "filmadora", "lente", "objetiva", "novo", "nova", "original",
+  "console", "videogame", "video", "filmadora", "novo", "nova", "original",
   "de", "da", "do", "das", "dos", "para", "com", "sem", "e", "o", "a", "os", "as", "em", "um", "uma",
 ]);
 
@@ -30,6 +30,9 @@ const ACCESSORY_WORDS = [
   "mount", "plate", "rig", "handle", "clamp", "braco", "extensor", "conversor", "leitor", "pecas", "peca",
   "reposicao", "manual", "kit de", "flash", "luz", "led", "iluminador", "cinta", "tela de", "lcd", "visor",
   "fita", "parafuso", "anel", "cobertura", "kit limpeza", "sensor de", "pilha", "pilhas",
+  "guide", "guia", "livro", "book", "ebook", "apostila", "curso", "sticker", "pelicula de", "gaiola para", "cage para",
+  "placa", "lente", "lentes", "objetiva", "xlr", "acessorio", "acessorios", "monitor de", "gravador", "follow focus", "matte box",
+  "nd ", "filtro", "tampa", "lens", "baseplate", "top plate", "side plate", "shoulder", "ombro", "mochila", "case para",
 ];
 
 export function normalize(text: string): string {
@@ -84,7 +87,7 @@ function looksLikeAccessory(title: string, queryNorm: string, tokens: string[]):
   // "para Sony FX3", "compatível com Sony FX3": quase sempre acessório.
   if (tokens.length > 0) {
     const alt = tokens.join("|");
-    if (new RegExp(`(^|\\s)(para|p|compativel com|compativel)\\s+(\\w+\\s+){0,3}(${alt})(\\s|$)`).test(title)) return true;
+    if (new RegExp(`(^|\\s)(para|p|compativel com|compativel|compatible with|for)\\s+(\\w+\\s+){0,6}(${alt})(\\s|$)`).test(title)) return true;
   }
   return false;
 }

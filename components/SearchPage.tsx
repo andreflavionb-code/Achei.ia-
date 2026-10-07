@@ -235,6 +235,11 @@ export function SearchPage() {
               Lojas ({selectedSources.length}/{allSources.length})
             </button>
           )}
+          {filters.sources && (
+            <button type="button" onClick={() => updateFilters({ sources: null })} className="text-zinc-600 underline">
+              todas as lojas
+            </button>
+          )}
         </div>
 
         {showSources && (
@@ -285,35 +290,93 @@ export function SearchPage() {
             </div>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2 text-xs">
-            {okSources.map((s) => (
-              <span key={s.id} className="rounded-full bg-zinc-200 px-2.5 py-1 text-zinc-700" title={s.cached ? "resultado recente (cache de 15 min)" : `${((s.ms ?? 0) / 1000).toFixed(1)}s`}>
-                {s.name}: {s.shown} de {s.fetched}
-                {s.cached && " ·"}
-              </span>
-            ))}
-            {errorSources.map((s) => (
-              <span key={s.id} className="rounded-full bg-red-100 px-2.5 py-1 text-red-700" title={s.error}>
-                {s.name}: erro
-              </span>
-            ))}
-          </div>
+          <details className="mt-2 rounded-lg border border-zinc-200 bg-white text-xs" open={result.offers.length < 20}>
+            <summary className="cursor-pointer px-3 py-2 text-zinc-700">
+              Por loja:{" "}
+              {result.sources.map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 && " · "}
+                  <span className={s.status === "error" ? "text-red-700" : s.shown === 0 ? "text-zinc-400" : ""}>
+                    {s.name} {s.status === "error" ? "erro" : s.shown}
+                  </span>
+                </span>
+              ))}
+              {status?.inactive?.map((s) => (
+                <span key={s.id} className="text-amber-700">
+                  {" · "}
+                  {s.name} desligada
+                </span>
+              ))}
+            </summary>
+            <table className="w-full border-t border-zinc-100">
+              <thead>
+                <tr className="text-left text-zinc-500">
+                  <th className="px-3 py-1.5 font-medium">Loja</th>
+                  <th className="px-2 py-1.5 font-medium">Encontradas</th>
+                  <th className="px-2 py-1.5 font-medium" title="Acessórios ou outros modelos, escondidos pelo modo preciso">Escondidas</th>
+                  <th className="px-2 py-1.5 font-medium" title="Fora dos filtros (sem juros, origem, condição, preço máximo)">Fora dos filtros</th>
+                  <th className="px-2 py-1.5 font-medium">Exibidas</th>
+                  <th className="px-2 py-1.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.sources.map((s) => {
+                  const filteredOut = Math.max(0, s.fetched - s.hiddenByPrecision - s.shown);
+                  return (
+                    <tr key={s.id} className="border-t border-zinc-100">
+                      <td className="px-3 py-1.5 font-medium text-zinc-800">
+                        {s.name}
+                        {s.cached && <span className="ml-1 text-zinc-400" title="resultado recente (cache de 15 min)">·</span>}
+                      </td>
+                      {s.status === "error" ? (
+                        <td colSpan={4} className="px-2 py-1.5 text-red-700">
+                          {s.error}
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-2 py-1.5">{s.fetched === 0 ? <span className="text-zinc-400">nada para esta busca</span> : s.fetched}</td>
+                          <td className="px-2 py-1.5">{s.hiddenByPrecision || ""}</td>
+                          <td className="px-2 py-1.5">{filteredOut || ""}</td>
+                          <td className="px-2 py-1.5 font-semibold">{s.shown}</td>
+                        </>
+                      )}
+                      <td className="px-2 py-1.5 text-right">
+                        {s.status === "ok" && s.fetched > s.shown && (
+                          <button
+                            onClick={() => updateFilters({ precise: false, sources: [s.id], interestFreeOnly: false, origin: "all", condition: "all", freeShippingOnly: false, maxPrice: null })}
+                            className="underline"
+                            title="Mostra tudo que esta loja devolveu, sem filtros e sem modo preciso"
+                          >
+                            ver tudo da loja
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {status?.inactive?.map((s) => (
+                  <tr key={s.id} className="border-t border-zinc-100 text-amber-700">
+                    <td className="px-3 py-1.5 font-medium">{s.name}</td>
+                    <td colSpan={5} className="px-2 py-1.5">
+                      desligada: {s.reason}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
           {hiddenByPrecision > 0 && (
             <p className="mt-2 text-xs text-zinc-500">
-              {hiddenByPrecision} item(ns) escondido(s) pelo modo preciso (acessórios ou sem relação com a busca).{" "}
+              {hiddenByPrecision} item(ns) escondido(s) pelo modo preciso (acessórios, outros modelos ou sem relação com a busca).{" "}
               <button onClick={() => updateFilters({ precise: false })} className="underline">
                 Mostrar tudo
               </button>
             </p>
           )}
-          {errorSources.length > 0 && (
-            <ul className="mt-2 space-y-1 text-xs text-red-700">
-              {errorSources.map((s) => (
-                <li key={s.id}>
-                  {s.name}: {s.error}
-                </li>
-              ))}
-            </ul>
+          {(filters.interestFreeOnly || filters.origin !== "all" || filters.condition !== "all" || filters.freeShippingOnly || filters.maxPrice) && (
+            <p className="mt-1 text-xs text-zinc-500">
+              Filtros ativos escondem o que a loja não informa (ex.: AliExpress não informa parcelas; Carrefour não informa origem).
+            </p>
           )}
 
           {showAlert && (
