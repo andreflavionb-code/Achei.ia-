@@ -47,6 +47,9 @@ const CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_MIN ?? 15) * 60 * 1000;
 // Em globalThis para sobreviver ao hot reload do `next dev` (senão cada edição zera o cache).
 const cacheState = globalThis as unknown as { __acheiRawCache?: Map<string, { at: number; offers: Offer[] }> };
 const rawCache = (cacheState.__acheiRawCache ??= new Map());
+/** Loja que bloqueou/falhou: não insiste por alguns minutos (insistir prolonga o bloqueio). */
+const ERROR_TTL_MS = Number(process.env.SEARCH_ERROR_CACHE_MIN ?? 5) * 60 * 1000;
+const errorCache = ((globalThis as unknown as { __acheiErrCache?: Map<string, { at: number; message: string }> }).__acheiErrCache ??= new Map());
 
 function cacheKey(adapterId: string, query: string): string {
   return `${adapterId}|${query.trim().toLowerCase()}`;
@@ -56,7 +59,19 @@ async function fetchRaw(adapter: MarketplaceAdapter, query: string): Promise<{ o
   const key = cacheKey(adapter.id, query);
   const hit = rawCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return { offers: hit.offers, cached: true };
-  const offers = await adapter.search(query, { maxResults: MAX_RESULTS_PER_SOURCE });
+  const failed = errorCache.get(key);
+  if (failed && Date.now() - failed.at < ERROR_TTL_MS) {
+    const min = Math.ceil((ERROR_TTL_MS - (Date.now() - failed.at)) / 60000);
+    throw new Error(`${failed.message} (nova tentativa automática em ${min} min; "Buscar de novo" força agora)`);
+  }
+  let offers: Offer[];
+  try {
+    offers = await adapter.search(query, { maxResults: MAX_RESULTS_PER_SOURCE });
+  } catch (err) {
+    if (ERROR_TTL_MS > 0) errorCache.set(key, { at: Date.now(), message: err instanceof Error ? err.message : String(err) });
+    throw err;
+  }
+  errorCache.delete(key);
   if (CACHE_TTL_MS > 0) {
     rawCache.set(key, { at: Date.now(), offers });
     for (const [k, v] of rawCache) if (Date.now() - v.at > CACHE_TTL_MS) rawCache.delete(k);
@@ -66,8 +81,14 @@ async function fetchRaw(adapter: MarketplaceAdapter, query: string): Promise<{ o
 
 /** Esvazia o cache (usado pelos alertas, que querem preço fresco, e pelo botão "Buscar de novo"). */
 export function clearSearchCache(query?: string): void {
-  if (!query) return rawCache.clear();
-  for (const k of rawCache.keys()) if (k.endsWith(`|${query.trim().toLowerCase()}`)) rawCache.delete(k);
+  if (!query) {
+    rawCache.clear();
+    errorCache.clear();
+    return;
+  }
+  const suffix = `|${query.trim().toLowerCase()}`;
+  for (const k of rawCache.keys()) if (k.endsWith(suffix)) rawCache.delete(k);
+  for (const k of errorCache.keys()) if (k.endsWith(suffix)) errorCache.delete(k);
 }
 
 /**
