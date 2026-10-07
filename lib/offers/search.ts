@@ -35,7 +35,9 @@ const MAX_RESULTS_PER_SOURCE = Number(process.env.MAX_RESULTS_PER_SOURCE ?? 200)
  * SEARCH_CACHE_MIN controla a validade (padrão 15 min; 0 desliga).
  */
 const CACHE_TTL_MS = Number(process.env.SEARCH_CACHE_MIN ?? 15) * 60 * 1000;
-const rawCache = new Map<string, { at: number; offers: Offer[] }>();
+// Em globalThis para sobreviver ao hot reload do `next dev` (senão cada edição zera o cache).
+const cacheState = globalThis as unknown as { __acheiRawCache?: Map<string, { at: number; offers: Offer[] }> };
+const rawCache = (cacheState.__acheiRawCache ??= new Map());
 
 function cacheKey(adapterId: string, query: string): string {
   return `${adapterId}|${query.trim().toLowerCase()}`;

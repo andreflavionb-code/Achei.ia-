@@ -1,5 +1,5 @@
 import { fetchHtmlFull, ScrapeError } from "./html";
-import { clearCookiesFor, fetchHtmlWithBrowser, scrapeMode } from "./browser";
+import { fetchHtmlWithBrowser, scrapeMode } from "./browser";
 
 export interface PageSource {
   /** Seletor que indica que a listagem carregou (usado pelo navegador). */
@@ -55,8 +55,8 @@ export async function loadAndParse<T>(
   let blocked = source.isBlocked(page.html, page.finalUrl, 200);
   let items = blocked ? [] : parse(page.html);
   if (blocked || (items.length === 0 && !source.isEmpty?.(page.html))) {
-    // Perfil "marcado" por um bloqueio anterior: limpa os cookies do site e tenta num perfil limpo e descartável.
-    await clearCookiesFor(new URL(url).hostname).catch(() => undefined);
+    // Segunda tentativa num perfil limpo e descartável. NUNCA apagar cookies do perfil
+    // principal: é lá que fica o login do usuário, que é o que destrava esses sites.
     page = await fetchHtmlWithBrowser(url, source.waitFor, { fresh: true });
     blocked = source.isBlocked(page.html, page.finalUrl, 200);
     items = blocked ? [] : parse(page.html);

@@ -172,18 +172,6 @@ async function fetchInContext(context: BrowserContext, url: string, waitForSelec
   }
 }
 
-/**
- * Apaga os cookies de um domínio no perfil. Depois de um bloqueio, alguns
- * sites (Casas Bahia/Akamai, Mercado Livre) gravam cookies que mantêm o
- * perfil "marcado" mesmo quando o bloqueio já passou; limpar e tentar de
- * novo costuma resolver.
- */
-export async function clearCookiesFor(hostname: string): Promise<void> {
-  const root = hostname.split(".").slice(-3).join(".").replace(/^www\./, "");
-  const context = await getContext();
-  await context.clearCookies({ domain: new RegExp(`(^|\\.)${root.replace(/\./g, "\\.")}$`) }).catch(() => undefined);
-}
-
 export async function closeBrowser(): Promise<void> {
   const promise = globalState.__acheiBrowser;
   if (!promise) return;
