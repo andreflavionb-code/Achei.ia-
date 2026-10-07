@@ -4,9 +4,12 @@
  * "tráfego suspeito"), Magazine Luiza e Casas Bahia (Akamai).
  *
  * Esses sites detectam o modo headless (até o "novo"). O que funciona é
- * uma janela de verdade. Para não atrapalhar, a janela é aberta FORA DA
- * TELA (posição -20000,-20000): existe, mas você não a vê. O perfil fica
- * em .browser-profile/ (cookies e verificações guardados entre buscas).
+ * uma janela de verdade. Para não atrapalhar, no macOS o PROCESSO do
+ * Chrome é ocultado (equivale a Cmd+H) logo depois de abrir: a janela
+ * existe e carrega as páginas, mas não aparece na tela nem rouba o foco.
+ * O seu Chrome pessoal não é tocado (ocultamos pelo PID). Na primeira
+ * vez o macOS pode pedir permissão para "controlar System Events".
+ * O perfil fica em .browser-profile/ (cookies e logins guardados entre buscas).
  *
  * Variáveis:
  *   SCRAPE_MODE      auto (padrão) | browser | plain
@@ -15,7 +18,11 @@
  *   BROWSER_CHANNEL  chrome (Google Chrome instalado) | chromium (Playwright) | auto (padrão)
  */
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import type { BrowserContext } from "playwright";
+
+const run = promisify(execFile);
 import { ScrapeError } from "./html";
 
 const NAV_TIMEOUT_MS = Number(process.env.BROWSER_TIMEOUT_MS ?? 30000);
@@ -41,6 +48,39 @@ function visible(): boolean {
   return process.env.BROWSER_VISIBLE?.trim() === "1";
 }
 
+/** PID do processo principal do Chrome que usa esta pasta de perfil. */
+async function chromePidFor(userDataDir: string): Promise<number | null> {
+  try {
+    const { stdout } = await run("ps", ["-axo", "pid=,command="]);
+    for (const line of stdout.split("\n")) {
+      if (line.includes(`--user-data-dir=${userDataDir}`) && !line.includes("--type=")) {
+        const pid = Number(line.trim().split(/\s+/)[0]);
+        if (pid > 0) return pid;
+      }
+    }
+  } catch {
+    /* ignora */
+  }
+  return null;
+}
+
+/**
+ * macOS: oculta o processo do Chrome (como Cmd+H). Só este processo, pelo
+ * PID; o Chrome pessoal do usuário continua como está. Silencioso se o
+ * sistema negar a permissão de automação (a janela fica visível).
+ */
+export async function hideChrome(userDataDir: string): Promise<boolean> {
+  if (process.platform !== "darwin" || headless() || visible()) return false;
+  const pid = await chromePidFor(userDataDir);
+  if (!pid) return false;
+  try {
+    await run("osascript", ["-e", `tell application "System Events" to set visible of (first process whose unix id is ${pid}) to false`], { timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function launchContext(): Promise<BrowserContext> {
   let pw: typeof import("playwright");
   try {
@@ -60,7 +100,7 @@ async function launchContext(): Promise<BrowserContext> {
   let lastError: unknown = null;
   for (const channel of channels) {
     try {
-      return await pw.chromium.launchPersistentContext(userDataDir, {
+      const ctx = await pw.chromium.launchPersistentContext(userDataDir, {
         channel,
         headless: headless(),
         viewport: { width: 1280, height: 860 },
@@ -69,6 +109,8 @@ async function launchContext(): Promise<BrowserContext> {
         args,
         ignoreDefaultArgs: ["--enable-automation"],
       });
+      await hideChrome(userDataDir);
+      return ctx;
     } catch (err) {
       lastError = err;
     }
@@ -119,6 +161,7 @@ async function withFreshContext<T>(fn: (ctx: BrowserContext) => Promise<T>): Pro
     args,
     ignoreDefaultArgs: ["--enable-automation"],
   });
+  await hideChrome(dir);
   try {
     return await fn(ctx);
   } finally {
@@ -133,8 +176,12 @@ export async function fetchHtmlWithBrowser(url: string, waitForSelector?: string
   return fetchInContext(await getContext(), url, waitForSelector);
 }
 
+const PROFILE_DIR = path.join(process.cwd(), ".browser-profile");
+
 async function fetchInContext(context: BrowserContext, url: string, waitForSelector?: string): Promise<BrowserPage> {
   const page = await context.newPage();
+  // Abrir uma aba pode trazer o app de volta à frente; esconde de novo (barato, ~100ms).
+  void hideChrome(PROFILE_DIR);
   try {
     await page.addInitScript(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => undefined });
